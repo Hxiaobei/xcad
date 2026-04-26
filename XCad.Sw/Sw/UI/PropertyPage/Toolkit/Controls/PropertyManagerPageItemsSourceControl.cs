@@ -1,0 +1,177 @@
+﻿//*********************************************************************
+//xCAD
+//Copyright(C) 2024 Xarial Pty Limited
+//Product URL: https://www.xcad.net
+//License: https://xcad.xarial.com/license/
+//*********************************************************************
+
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
+using SolidWorks.Interop.swconst;
+using XCad.kit.PageBuilder.Base;
+using XCad.kit.Services;
+using XCad.UI.PropertyPage.Attributes;
+using XCad.UI.PropertyPage.Base;
+using XCad.UI.PropertyPage.Structures;
+
+
+namespace XCad.Sw.UI.PropertyPage.Toolkit.Controls {
+    internal abstract class PropertyManagerPageItemsSourceControl<TVal, TSwCtrl> : PropertyManagerPageBaseControl<TVal, TSwCtrl>, IItemsControl
+        where TSwCtrl : class {
+        private ItemsControlItem[] m_Items;
+
+        public virtual ItemsControlItem[] Items {
+            get => m_Items;
+            set {
+                m_Items = value;
+                LoadItemsIntoControl(value);
+            }
+        }
+
+        protected abstract void LoadItemsIntoControl(ItemsControlItem[] newItems);
+
+        private readonly IMetadata m_SrcMetadata;
+        private readonly Type m_SpecificItemType;
+
+        private readonly string m_DispMembPath;
+
+        public PropertyManagerPageItemsSourceControl(SwApplication app, IGroup parentGroup, IIconsCreator iconConv,
+            IAttributeSet atts, IMetadata[] metadata, swPropertyManagerPageControlType_e type, ref int numberOfUsedIds)
+            : base(app, parentGroup, iconConv, atts, metadata, type, ref numberOfUsedIds) {
+            m_SpecificItemType = atts.ContextType;
+
+            ParseItems(app, atts, metadata, out bool isStatic, out ItemsControlItem[] staticItems, out m_SrcMetadata, out m_DispMembPath);
+
+            if(m_SrcMetadata != null) {
+                m_SrcMetadata.Changed += OnMetadataChanged;
+            }
+
+            SetStaticItems(atts, isStatic, staticItems);
+        }
+
+        protected abstract void SetStaticItems(IAttributeSet atts, bool isStatic, ItemsControlItem[] staticItems);
+
+        public override void Update() {
+            if(m_SrcMetadata != null) {
+                LoadItemsFromSource(m_SrcMetadata.Value);
+            }
+        }
+
+        private void OnMetadataChanged(IMetadata metadata, object value) {
+            LoadItemsFromSource(value);
+        }
+
+        private void LoadItemsFromSource(object value) {
+            var items = new List<ItemsControlItem>();
+
+            if(value is IEnumerable) {
+                foreach(var item in value as IEnumerable) {
+                    items.Add(new ItemsControlItem(item, m_DispMembPath));
+                }
+            } else if(value is null) {
+                //return empty
+            } else {
+                throw new NotSupportedException("Source property must be enumerable");
+            }
+
+            Items = items.ToArray();
+        }
+
+        private void ParseItems(ISwApplication app, IAttributeSet atts, IMetadata[] metadata,
+            out bool isStatic, out ItemsControlItem[] staticItems, out IMetadata itemsSourceMetadata,
+            out string dispMembPath) {
+            if(atts.ContextType.IsEnum) {
+                staticItems = CreateEnumItems(atts.ContextType);
+
+                isStatic = true;
+                itemsSourceMetadata = null;
+                dispMembPath = "";
+            } else {
+                var customItemsAtt = atts.Get<ItemsSourceControlAttribute>();
+                dispMembPath = customItemsAtt.DisplayMemberPath;
+
+                if(customItemsAtt.StaticItems?.Any() == true) {
+                    staticItems = customItemsAtt
+                        .StaticItems.Select(i => new ItemsControlItem(i, customItemsAtt.DisplayMemberPath)).ToArray();
+
+                    isStatic = true;
+                    itemsSourceMetadata = null;
+                } else if(customItemsAtt.CustomItemsProvider != null) {
+                    itemsSourceMetadata = null;
+
+                    if(customItemsAtt.Dependencies?.Any() != true) {
+                        var provider = customItemsAtt.CustomItemsProvider;
+                        staticItems = provider.ProvideItems(app, new IControl[0]).Select(i => new ItemsControlItem(i, customItemsAtt.DisplayMemberPath)).ToArray();
+                        isStatic = true;
+                    } else {
+                        isStatic = false;
+                        staticItems = null;
+                    }
+                } else if(customItemsAtt.ItemsSource != null) {
+                    isStatic = false;
+                    staticItems = null;
+                    itemsSourceMetadata = (metadata?.FirstOrDefault(m => object.Equals(m.Tag, customItemsAtt.ItemsSource)))
+                        ?? throw new NullReferenceException($"Failed to find the items source metadata property: {customItemsAtt.ItemsSource}");
+                } else {
+                    throw new NotSupportedException("Items source is not specified");
+                }
+            }
+        }
+
+        protected virtual ItemsControlItem[] CreateEnumItems(Type enumType) {
+            if(!enumType.IsEnum) {
+                throw new InvalidCastException($"{enumType.FullName} must be an enum");
+            }
+
+            var items = new List<ItemsControlItem>();
+
+            foreach(Enum en in Enum.GetValues(enumType)) {
+                // 获取显示名称，若不存在则使用枚举值本身的名称
+                var dispName = en.TryGetAttribute<DisplayNameAttribute>()?.DisplayName ?? en.ToString();
+
+                // 获取描述信息，若不存在则为空字符串
+                var desc = en.TryGetAttribute<DescriptionAttribute>()?.Description ?? "";
+
+                items.Add(new ItemsControlItem(en, dispName, desc));
+            }
+
+            return items.ToArray();
+        }
+
+        protected virtual TVal GetItem(int index) {
+            if(Items != null) {
+                if(index >= 0 && index < Items.Length) {
+                    return (TVal)Items[index].Value;
+                }
+            }
+
+            return GetDefaultItemValue();
+        }
+
+        protected TVal GetDefaultItemValue() {
+            if(m_SpecificItemType.IsValueType) {
+                return (TVal)Activator.CreateInstance(m_SpecificItemType);
+            } else {
+                return default;
+            }
+        }
+
+        protected int GetItemIndex(TVal value) {
+            int index = -1;
+
+            if(Items != null) {
+                for(int i = 0; i < Items.Length; i++) {
+                    if(object.Equals(Items[i].Value, value)) {
+                        index = (short)i;
+                        break;
+                    }
+                }
+            }
+
+            return index;
+        }
+    }
+}

@@ -1,0 +1,23 @@
+﻿//*********************************************************************
+//xCAD
+//Copyright(C) 2024 Xarial Pty Limited
+//Product URL: https://www.xcad.net
+//License: https://xcad.xarial.com/license/
+//*********************************************************************
+
+namespace XCad.Sw.Documents.Structures {
+    /// <summary>
+    /// Argument passed with <see cref="ISwDocument.Saving"/> event
+    /// </summary>
+    public class DocumentSaveArgs {
+        /// <summary>
+        /// Overrides the save as file name
+        /// </summary>
+        public string FileName { get; set; }
+
+        /// <summary>
+        /// Specifies if saving operation needs to be cancelled
+        /// </summary>
+        public bool Cancel { get; set; }
+    }
+}

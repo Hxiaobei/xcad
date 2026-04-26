@@ -1,0 +1,30 @@
+﻿//*********************************************************************
+//xCAD
+//Copyright(C) 2024 Xarial Pty Limited
+//Product URL: https://www.xcad.net
+//License: https://xcad.xarial.com/license/
+//*********************************************************************
+
+using XCad.kit.PageBuilder.Base;
+using XCad.kit.PageBuilder.Constructors;
+using XCad.kit.Services;
+using XCad.Sw.UI.PropertyPage.Toolkit.Controls;
+
+namespace XCad.Sw.UI.PropertyPage.Toolkit.Constructors {
+    internal class PropertyManagerPageConstructor : PageConstructor<PropertyManagerPagePage> {
+        private readonly SwApplication m_App;
+        private readonly IIconsCreator m_IconsConv;
+        private readonly SwPropertyManagerPageHandler m_Handler;
+
+        internal PropertyManagerPageConstructor(SwApplication app, IIconsCreator iconsConv, SwPropertyManagerPageHandler handler) {
+            m_App = app;
+            m_IconsConv = iconsConv;
+
+            m_Handler = handler;
+            handler.Init(m_App.Sw);
+        }
+
+        protected override PropertyManagerPagePage Create(IAttributeSet atts)
+            => new PropertyManagerPagePage(m_App, atts, m_IconsConv, m_Handler);
+    }
+}

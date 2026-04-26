@@ -1,0 +1,1285 @@
+//*********************************************************************
+//xCAD
+//Copyright(C) 2024 Xarial Pty Limited
+//Product URL: https://www.xcad.net
+//License: https://xcad.xarial.com/license/
+//*********************************************************************
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using SolidWorks.Interop.sldworks;
+using SolidWorks.Interop.swconst;
+using XCad.kit.Services;
+using XCad.kit.Utils;
+using XCad.Sw;
+using XCad.Sw.Annotations;
+using XCad.Sw.Base;
+using XCad.Sw.Base.Enums;
+using XCad.Sw.Data;
+using XCad.Sw.Data.Enums;
+using XCad.Sw.Data.EventHandlers;
+using XCad.Sw.Documents.Delegates;
+using XCad.Sw.Documents.Enums;
+using XCad.Sw.Documents.EventHandlers;
+using XCad.Sw.Documents.Exceptions;
+using XCad.Sw.Documents.Services;
+using XCad.Sw.Enums;
+using XCad.Sw.Exceptions;
+using XCad.Sw.Features;
+using XCad.Sw.Utils;
+
+namespace XCad.Sw.Documents {
+    public interface ISwDocument : ISwObject, IXTransaction, IDimensionable, IDisposable {
+        IModelDoc2 Model { get; }
+        ISwFeatureManager Features { get; }
+        ISwSelectionCollection Selections { get; }
+        new ISwDimensionsCollection Dimensions { get; }
+        TSwObj DeserializeObject<TSwObj>(Stream stream) where TSwObj : ISwObject;
+
+        /// <summary>
+        /// Creates xCAD object from a SOLIDWORKS dispatch object
+        /// </summary>
+        /// <typeparam name="TObj">Type of xCAD object</typeparam>
+        /// <param name="disp">SOLIDWORKS specific COM object instance</param>
+        /// <returns>xCAD object</returns>
+        TObj CreateObjectFromDispatch<TObj>(object disp) where TObj : ISwObject;
+
+        /// <summary>
+        /// Fired when user data stream is available for reading
+        /// </summary>
+        event DataStoreAvailableDelegate StreamReadAvailable;
+
+        /// <summary>
+        /// Fired when user data storage is available for reading
+        /// </summary>
+        event DataStoreAvailableDelegate StorageReadAvailable;
+
+        /// <summary>
+        /// Fired when user data stream is available for writing
+        /// </summary>
+        event DataStoreAvailableDelegate StreamWriteAvailable;
+
+        /// <summary>
+        /// Fired when user data storage is available for writing
+        /// </summary>
+        event DataStoreAvailableDelegate StorageWriteAvailable;
+
+        /// <summary>
+        /// Fired when document is rebuilt
+        /// </summary>
+        event DocumentEventDelegate Rebuilt;
+
+        /// <summary>
+        /// Fired when documetn is saving
+        /// </summary>
+        event DocumentSaveDelegate Saving;
+
+        /// <summary>
+        /// Fired when document is closing
+        /// </summary>
+        event DocumentCloseDelegate Closing;
+
+        /// <summary>
+        /// Fired when document is destroyed
+        /// </summary>
+        event DocumentEventDelegate Destroyed;
+
+        /// <summary>
+        /// Units assigned in this document
+        /// </summary>
+        IXUnits Units { get; }
+
+        /// <summary>
+        /// Document specific options
+        /// </summary>
+        IXDocumentOptions Options { get; }
+
+        /// <summary>
+        /// Changes the title of this document
+        /// </summary>
+        string Title { get; set; }
+
+        /// <summary>
+        /// Document template
+        /// </summary>
+        string Template { get; set; }
+
+        /// <summary>
+        /// Path to the document (if saved)
+        /// </summary>
+        string Path { get; set; }
+
+        /// <summary>
+        /// Checks if document has any unsaved changes
+        /// </summary>
+        bool IsDirty { get; set; }
+
+        /// <summary>
+        /// Gets or sets the state of the document
+        /// </summary>
+        DocumentState_e State { get; set; }
+
+        /// <summary>
+        /// Returns views collection
+        /// </summary>
+        ISwModelViewsCollection ModelViews { get; }
+
+        /// <summary>
+        /// Closes this document
+        /// </summary>
+        void Close();
+
+        /// <summary>
+        /// Saves this document
+        /// </summary>
+        /// <exception cref="Exceptions.SaveNeverSavedDocumentException"/>
+        /// <exception cref="Exceptions.SaveDocumentFailedException"/>
+        void Save();
+
+        /// <summary>
+        /// Pre-creates save-as operation
+        /// </summary>
+        /// <param name="filePath"></param>
+        IXSaveOperation PreCreateSaveAsOperation(string filePath);
+
+        /// <summary>
+        /// Collection of annotations
+        /// </summary>
+        IXRepository<ISwAnnotation> Annotations { get; }
+
+        /// <summary>
+        /// Opens the user data stream from this document
+        /// </summary>
+        /// <param name="name">Name of the stream</param>
+        /// <param name="access">Access type</param>
+        /// <returns>Pointer to stream</returns>
+        Stream OpenStream(string name, AccessType_e access);
+
+        /// <summary>
+        /// Opens the user data storage from this document
+        /// </summary>
+        /// <param name="name">Name of the storage</param>
+        /// <param name="access">Access type</param>
+        /// <returns>Pointer to the storage</returns>
+        IStorage OpenStorage(string name, AccessType_e access);
+
+        /// <summary>
+        /// Returns top level dependencies of this document
+        /// </summary>
+        /// <remarks>Dependencies might be uncommited if document is loaded view only or in the rapid mode. Use <see cref="IXTransaction.IsCommitted"/> to check the state and call <see cref="IXTransaction.Commit(System.Threading.CancellationToken)"/> to load document if needed.
+        /// In most CADs this method will work with uncommitted documents</remarks>
+        IXDocumentDependencies Dependencies { get; }
+
+        /// <summary>
+        /// Regenerates this document
+        /// </summary>
+        void Rebuild();
+
+        /// <summary>
+        /// Starts the group of opertions
+        /// </summary>
+        /// <returns>Operation group template</returns>
+        IOperationGroup PreCreateOperationGroup();
+
+        /// <summary>
+        /// Returns the time stamp of the change of the current model
+        /// </summary>
+        int UpdateStamp { get; }
+    }
+
+    /// <summary>
+    /// Represents the unknown document type
+    /// </summary>
+    /// <remarks>This interface provides an access to the document whose specific type cannot be determined in advance
+    /// (e.g. imported document types might be both parts and assemblies and it is not known until the document is opened)</remarks>
+    public interface IXUnknownDocument : ISwDocument {
+        /// <summary>
+        /// Retrieves the specific document from the unknown document
+        /// </summary>
+        /// <returns></returns>
+        ISwDocument GetSpecific();
+    }
+
+    [DebuggerDisplay("{" + nameof(Title) + "}")]
+    internal abstract class SwDocument : SwObject, ISwDocument {
+        private class Interconnect3DDisabler : IDisposable {
+            private readonly ISldWorks m_App;
+            private readonly bool? m_Is3DInterconnectEnabled;
+
+            internal Interconnect3DDisabler(ISldWorks app) {
+                m_App = app;
+
+                if(m_App.IsVersionNewerOrEqual(SwVersion_e.Sw2020)) {
+                    var enable3DInterconnect = m_App.GetUserPreferenceToggle(
+                        (int)swUserPreferenceToggle_e.swMultiCAD_Enable3DInterconnect);
+
+                    if(enable3DInterconnect) {
+                        m_Is3DInterconnectEnabled = enable3DInterconnect;
+
+                        m_App.SetUserPreferenceToggle(
+                            (int)swUserPreferenceToggle_e.swMultiCAD_Enable3DInterconnect, false);
+                    }
+                }
+            }
+
+            public void Dispose() {
+                if(m_Is3DInterconnectEnabled.HasValue) {
+                    m_App.SetUserPreferenceToggle(
+                            (int)swUserPreferenceToggle_e.swMultiCAD_Enable3DInterconnect, m_Is3DInterconnectEnabled.Value);
+                }
+            }
+        }
+
+        protected static Dictionary<string, swDocumentTypes_e> m_NativeFileExts { get; }
+        private bool? m_IsClosed;
+
+        static SwDocument() {
+            m_NativeFileExts = new Dictionary<string, swDocumentTypes_e>(StringComparer.CurrentCultureIgnoreCase)
+            {
+                { SwConst.Prt, swDocumentTypes_e.swDocPART },
+                { SwConst.Asm, swDocumentTypes_e.swDocASSEMBLY },
+                { SwConst.Drw, swDocumentTypes_e.swDocDRAWING },
+                { SwConst.Lfp, swDocumentTypes_e.swDocPART },
+                { SwConst.Blk, swDocumentTypes_e.swDocPART },
+                { SwConst.Prtdot, swDocumentTypes_e.swDocPART },
+                { SwConst.Asmdot, swDocumentTypes_e.swDocASSEMBLY },
+                { SwConst.Drwdot, swDocumentTypes_e.swDocDRAWING }
+            };
+        }
+
+        private DocumentEventDelegate m_DestroyedDel;
+        private Action<SwDocument> m_HiddenDel;
+        private DocumentCloseDelegate m_ClosingDel;
+
+        public event DocumentEventDelegate Destroyed {
+            add {
+                m_DestroyedDel += value;
+                AttachDestroyEventsIfNeeded();
+            }
+            remove {
+                m_DestroyedDel -= value;
+                DetachDestroyEventsIfNeeded();
+            }
+        }
+
+        internal event Action<SwDocument> Hidden {
+            add {
+                m_HiddenDel += value;
+                AttachDestroyEventsIfNeeded();
+            }
+            remove {
+                m_HiddenDel -= value;
+                DetachDestroyEventsIfNeeded();
+            }
+        }
+
+        public event DocumentCloseDelegate Closing {
+            add {
+                m_ClosingDel += value;
+                AttachDestroyEventsIfNeeded();
+            }
+            remove {
+                m_ClosingDel -= value;
+                DetachDestroyEventsIfNeeded();
+            }
+        }
+
+        public event DocumentEventDelegate Rebuilt {
+            add => m_DocumentRebuildEventHandler.Attach(value);
+            remove => m_DocumentRebuildEventHandler.Detach(value);
+        }
+
+        public event DocumentSaveDelegate Saving {
+            add => m_DocumentSavingEventHandler.Attach(value);
+            remove => m_DocumentSavingEventHandler.Detach(value);
+        }
+
+        public event DataStoreAvailableDelegate StreamReadAvailable {
+            add => m_StreamReadAvailableHandler.Attach(value);
+            remove => m_StreamReadAvailableHandler.Detach(value);
+        }
+
+        public event DataStoreAvailableDelegate StorageReadAvailable {
+            add => m_StorageReadAvailableHandler.Attach(value);
+            remove => m_StorageReadAvailableHandler.Detach(value);
+        }
+
+        public event DataStoreAvailableDelegate StreamWriteAvailable {
+            add => m_StreamWriteAvailableHandler.Attach(value);
+            remove => m_StreamWriteAvailableHandler.Detach(value);
+        }
+
+        public event DataStoreAvailableDelegate StorageWriteAvailable {
+            add => m_StorageWriteAvailableHandler.Attach(value);
+            remove => m_StorageWriteAvailableHandler.Detach(value);
+        }
+
+
+        ISwModelViewsCollection ISwDocument.ModelViews => ModelViews;
+
+        TObj ISwDocument.DeserializeObject<TObj>(Stream stream) => DeserializeBaseObject<TObj>(stream);
+
+        protected readonly IXLogger m_Logger;
+
+        private readonly StreamReadAvailableEventsHandler m_StreamReadAvailableHandler;
+        private readonly StorageReadAvailableEventsHandler m_StorageReadAvailableHandler;
+        private readonly StreamWriteAvailableEventsHandler m_StreamWriteAvailableHandler;
+        private readonly StorageWriteAvailableEventsHandler m_StorageWriteAvailableHandler;
+        private readonly DocumentRebuildEventsHandler m_DocumentRebuildEventHandler;
+        private readonly DocumentSavingEventHandler m_DocumentSavingEventHandler;
+
+        public IModelDoc2 Model => m_Creator.Element;
+
+        public string Path {
+            get {
+                if(IsCommitted) {
+                    try {
+                        return Model.GetPathName();
+                    } catch {
+                        return m_CachedFilePath;
+                    }
+                } else {
+                    return m_Creator.CachedProperties.Get<string>();
+                }
+            }
+            set {
+                if(IsCommitted) {
+                    throw new NotSupportedException("Path can only be changed for the not commited document");
+                } else {
+                    m_Creator.CachedProperties.Set(value);
+                }
+            }
+        }
+
+        public string Template {
+            get {
+                if(IsCommitted) {
+                    throw new NotSupportedException("Template cannot be retrieved for the created document");
+                } else {
+                    return m_Creator.CachedProperties.Get<string>();
+                }
+            }
+            set {
+                if(IsCommitted) {
+                    throw new NotSupportedException("Template cannot be changed for the committed document");
+                } else {
+                    m_Creator.CachedProperties.Set(value);
+                }
+            }
+        }
+
+        public string Title {
+            get {
+                if(IsCommitted) {
+                    return Model.GetTitle();
+                } else {
+                    var userTitle = m_Creator.CachedProperties.Get<string>();
+
+                    if(!string.IsNullOrEmpty(userTitle)) {
+                        return userTitle;
+                    } else {
+                        var path = Path;
+
+                        if(!string.IsNullOrEmpty(path)) {
+                            return System.IO.Path.GetFileName(path);
+                        } else {
+                            return "";
+                        }
+                    }
+                }
+            }
+            set {
+                if(IsCommitted) {
+                    if(string.IsNullOrEmpty(Path)) {
+                        Model.SetTitle2(value);
+                    } else {
+                        throw new NotSupportedException("Title can only be changed for new document");
+                    }
+                } else {
+                    m_Creator.CachedProperties.Set(value);
+                }
+            }
+        }
+
+        public DocumentState_e State {
+            get {
+                if(IsCommitted) {
+                    return GetDocumentState();
+                } else {
+                    return m_Creator.CachedProperties.Get<DocumentState_e>();
+                }
+            }
+            set {
+                if(IsCommitted) {
+                    var curState = GetDocumentState();
+
+                    if(curState == value) {
+                        //do nothing
+                    } else if(((int)curState - (int)value) == (int)DocumentState_e.Hidden) {
+                        Model.Visible = true;
+                    } else if((int)value - ((int)curState) == (int)DocumentState_e.Hidden) {
+                        Model.Visible = false;
+                    } else {
+                        throw new Exception("Only visibility can changed after the document is loaded");
+                    }
+                } else {
+                    m_Creator.CachedProperties.Set(value);
+                }
+            }
+        }
+
+        private DocumentState_e GetDocumentState() {
+            var state = DocumentState_e.Default;
+
+            if(Model.IsOpenedReadOnly()) {
+                state |= DocumentState_e.ReadOnly;
+            }
+
+            if(Model.IsOpenedViewOnly()) {
+                state |= DocumentState_e.ViewOnly;
+            }
+
+            if(!Model.Visible) {
+                state |= DocumentState_e.Hidden;
+            }
+
+            return state;
+        }
+
+        private readonly Lazy<SwFeatureManager> m_FeaturesLazy;
+        private readonly Lazy<ISwSelectionCollection> m_SelectionsLazy;
+        private readonly Lazy<ISwDimensionsCollection> m_DimensionsLazy;
+        private readonly Lazy<SwAnnotationCollection> m_AnnotationsLazy;
+
+        public IXDocumentDependencies Dependencies { get; }
+        public ISwFeatureManager Features => m_FeaturesLazy.Value;
+        public ISwSelectionCollection Selections => m_SelectionsLazy.Value;
+        public ISwDimensionsCollection Dimensions => m_DimensionsLazy.Value;
+
+        public bool IsDirty {
+            get => Model.GetSaveFlag();
+            set {
+                if(value == true) {
+                    Model.SetSaveFlag();
+
+                    if(!Model.GetSaveFlag()) {
+                        throw new DirtyFlagIsNotSetException();
+                    }
+                } else {
+                    throw new NotSupportedException("Dirty flag cannot be removed. Save document to remove dirty flag");
+                }
+            }
+        }
+
+        public bool IsCommitted => m_Creator.IsCreated;
+
+        protected readonly IElementCreator<IModelDoc2> m_Creator;
+
+        private bool m_AreEventsAttached;
+        private bool m_AreDestroyEventsAttached;
+
+        internal override SwDocument OwnerDocument => this;
+
+        private bool m_IsDisposed;
+        private readonly Lazy<ISwModelViewsCollection> m_ModelViewsLazy;
+        /// <summary>
+        /// This is a fallback file path in case the COM pointer to this document is broken (e.g. file is closed or SW is closed)
+        /// </summary>
+        private string m_CachedFilePath;
+
+        internal SwDocument(IModelDoc2 model, SwApplication app, IXLogger logger)
+            : this(model, app, logger, true) {
+        }
+
+        internal SwDocument(IModelDoc2 model, SwApplication app, IXLogger logger, bool created) : base(model, null, app) {
+            m_Logger = logger;
+
+            m_Creator = new ElementCreator<IModelDoc2>(CreateDocument, CommitCache, model, created);
+
+            m_FeaturesLazy = new Lazy<SwFeatureManager>(() => new SwDocumentFeatureManager(this, app, new Context(this)));
+            m_SelectionsLazy = new Lazy<ISwSelectionCollection>(() => new SwSelectionCollection(this, app));
+            m_DimensionsLazy = new Lazy<ISwDimensionsCollection>(() => new SwFeatureManagerDimensionsCollection(this.Features, new Context(this)));
+            m_AnnotationsLazy = new Lazy<SwAnnotationCollection>(CreateAnnotations);
+            m_ModelViewsLazy = new Lazy<ISwModelViewsCollection>(() => new SwModelViewsCollection(this, app));
+            Units = new SwUnits(this);
+
+            Options = new SwDocumentOptions(this);
+
+            Dependencies = new SwDocumentDependencies(this, m_Logger);
+
+            m_StreamReadAvailableHandler = new StreamReadAvailableEventsHandler(this, app);
+            m_StreamWriteAvailableHandler = new StreamWriteAvailableEventsHandler(this, app);
+            m_StorageReadAvailableHandler = new StorageReadAvailableEventsHandler(this, app);
+            m_StorageWriteAvailableHandler = new StorageWriteAvailableEventsHandler(this, app);
+            m_DocumentRebuildEventHandler = new DocumentRebuildEventsHandler(this, app);
+            m_DocumentSavingEventHandler = new DocumentSavingEventHandler(this, app);
+
+            m_AreEventsAttached = false;
+
+            if(IsCommitted) {
+                m_CachedFilePath = model.GetPathName();
+                AttachEvents();
+            }
+
+            m_IsDisposed = false;
+        }
+
+        public override object Dispatch => Model;
+
+        internal void SetModel(IModelDoc2 model) => m_Creator.Set(model);
+
+        private IModelDoc2 CreateDocument(CancellationToken cancellationToken) {
+            //if (((SwDocumentCollection)OwnerApplication.Documents).TryFindExistingDocumentByPath(Path, out _))
+            //{
+            //    throw new DocumentAlreadyOpenedException(Path);
+            //}
+
+            var docType = -1;
+
+            if(DocumentType.HasValue) {
+                docType = (int)DocumentType.Value;
+            }
+
+            var origVisible = true;
+
+            if(docType != -1) {
+                origVisible = OwnerApplication.Sw.GetDocumentVisible(docType);
+            }
+
+            IModelDoc2 model = null;
+
+            try {
+                if(docType != -1) {
+                    var visible = !State.HasFlag(DocumentState_e.Hidden);
+
+                    OwnerApplication.Sw.DocumentVisible(visible, docType);
+                }
+
+                if(string.IsNullOrEmpty(Path)) {
+                    model = CreateNewDocument();
+                } else {
+                    m_CachedFilePath = Path;
+                    model = OpenDocument();
+                }
+
+                return model;
+            } finally {
+                if(model != null) {
+                    this.Bind(model);
+                }
+
+                if(docType != -1) {
+                    OwnerApplication.Sw.DocumentVisible(origVisible, docType);
+                }
+            }
+        }
+
+        protected abstract SwAnnotationCollection CreateAnnotations();
+
+        protected virtual void CommitCache(IModelDoc2 model, CancellationToken cancellationToken) {
+            if(m_FeaturesLazy.IsValueCreated) {
+                m_FeaturesLazy.Value.CommitCache(cancellationToken);
+            }
+        }
+
+        internal protected abstract swDocumentTypes_e? DocumentType { get; }
+
+        public override bool Equals(ISwObject other) {
+            if(object.ReferenceEquals(this, other)) {
+                return true;
+            }
+
+            if(other == null) {
+                return false;
+            }
+
+            if(other is ISwDocument) {
+                if(IsCommitted && ((ISwDocument)other).IsCommitted) {
+                    var model1 = Model;
+                    var model2 = ((ISwDocument)other).Model;
+
+                    if(object.ReferenceEquals(model1, model2)) {
+                        return true;
+                    }
+
+                    bool isAlive1;
+                    bool isAlive2;
+
+                    string title1 = "";
+                    string title2 = "";
+
+                    try {
+                        title1 = model1.GetTitle();
+                        isAlive1 = true;
+                    } catch {
+                        isAlive1 = false;
+                    }
+
+                    try {
+                        title2 = model2.GetTitle();
+                        isAlive2 = true;
+                    } catch {
+                        isAlive2 = false;
+                    }
+
+                    if(isAlive1 && isAlive2) {
+                        //NOTE: in some cases drawings can have the same title so it might not be safe to only compare by titles
+                        if(string.Equals(title1, title2, StringComparison.CurrentCultureIgnoreCase)) {
+                            return OwnerApplication.Sw.IsSame(model1, model2) == (int)swObjectEquality.swObjectSame;
+                        } else {
+                            return false;
+                        }
+                    } else if(!isAlive1 && !isAlive2) {
+                        if(!string.IsNullOrEmpty(m_CachedFilePath)) {
+                            return string.Equals(m_CachedFilePath, ((SwDocument)other).m_CachedFilePath, StringComparison.CurrentCultureIgnoreCase);
+                        } else {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    }
+                } else if(!IsCommitted && !((ISwDocument)other).IsCommitted) {
+                    if(!string.IsNullOrEmpty(Path)) {
+                        return string.Equals(Path, ((ISwDocument)other).Path, StringComparison.CurrentCultureIgnoreCase);
+                    } else {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+
+        public override bool IsAlive {
+            get {
+                var model = Model;
+
+                try {
+                    var title = model.GetTitle();
+                    return true;
+                } catch {
+                    return false;
+                }
+            }
+        }
+
+        public int UpdateStamp => Model.GetUpdateStamp();
+
+        public IXUnits Units { get; }
+        public virtual IXDocumentOptions Options { get; }
+
+        public virtual ISwModelViewsCollection ModelViews => m_ModelViewsLazy.Value;
+
+        public IXRepository<ISwAnnotation> Annotations => m_AnnotationsLazy.Value;
+
+        IXRepository<ISwDimension> IDimensionable.Dimensions => Dimensions;
+
+        private SwVersion_e GetVersion(string[] versHistory) {
+            if(versHistory?.Any() == true) {
+                var latestVers = versHistory.Last();
+
+                var majorRev = int.Parse(latestVers.Substring(0, latestVers.IndexOf('[')));
+
+                switch(majorRev) {
+                    case 44:
+                    case 243:
+                    case 483:
+                    case 629:
+                    case 822:
+                    case 1008:
+                    case 1137:
+                        return SwVersion_e.SwPrior2000;
+                    case 1500:
+                        return SwVersion_e.Sw2000;
+                    case 1750:
+                        return SwVersion_e.Sw2001;
+                    case 1950:
+                        return SwVersion_e.Sw2001Plus;
+                    case 2200:
+                        return SwVersion_e.Sw2003;
+                    case 2500:
+                        return SwVersion_e.Sw2004;
+                    case 2800:
+                        return SwVersion_e.Sw2005;
+                    case 3100:
+                        return SwVersion_e.Sw2006;
+                    case 3400:
+                        return SwVersion_e.Sw2007;
+                    case 3800:
+                        return SwVersion_e.Sw2008;
+                    case 4100:
+                        return SwVersion_e.Sw2009;
+                    case 4400:
+                        return SwVersion_e.Sw2010;
+                    case 4700:
+                        return SwVersion_e.Sw2011;
+                    case 5000:
+                        return SwVersion_e.Sw2012;
+                    case 6000:
+                        return SwVersion_e.Sw2013;
+                    case 7000:
+                        return SwVersion_e.Sw2014;
+                    case 8000:
+                        return SwVersion_e.Sw2015;
+                    case 9000:
+                        return SwVersion_e.Sw2016;
+                    case 10000:
+                        return SwVersion_e.Sw2017;
+                    case 11000:
+                        return SwVersion_e.Sw2018;
+                    case 12000:
+                        return SwVersion_e.Sw2019;
+                    case 13000:
+                        return SwVersion_e.Sw2020;
+                    case 14000:
+                        return SwVersion_e.Sw2021;
+                    case 15000:
+                        return SwVersion_e.Sw2022;
+                    case 16000:
+                        return SwVersion_e.Sw2023;
+                    case 17000:
+                        return SwVersion_e.Sw2024;
+                    case 18000:
+                        return SwVersion_e.Sw2025;
+                    default:
+                        throw new NotSupportedException($"'{latestVers}' version is not recognized");
+                }
+            } else {
+                throw new NullReferenceException($"Version information is not found");
+            }
+        }
+
+        private IModelDoc2 CreateNewDocument() {
+            var docTemplate = Template;
+
+            GetPaperSize(out var paperSize, out var paperWidth, out var paperHeight);
+
+            if(string.IsNullOrEmpty(docTemplate)) {
+                if(!DocumentType.HasValue) {
+                    throw new Exception("Cannot find the default template for unknown document type");
+                }
+
+                var useDefTemplates = OwnerApplication.Sw.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swAlwaysUseDefaultTemplates);
+
+                try {
+                    OwnerApplication.Sw.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swAlwaysUseDefaultTemplates, true);
+
+                    docTemplate = OwnerApplication.Sw.GetDocumentTemplate(
+                        (int)DocumentType.Value, "", (int)paperSize, paperWidth, paperHeight);
+                } finally {
+                    OwnerApplication.Sw.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swAlwaysUseDefaultTemplates, useDefTemplates);
+                }
+            }
+
+            if(!string.IsNullOrEmpty(docTemplate)) {
+                var doc = OwnerApplication.Sw.NewDocument(docTemplate, (int)paperSize, paperWidth, paperHeight) as IModelDoc2;
+
+                if(doc != null) {
+                    if(!string.IsNullOrEmpty(Title)) {
+                        //TODO: need to communicate exception if title is not set, do not throw it from here as the doc won't be registered
+                        doc.SetTitle2(Title);
+                    }
+
+                    return doc;
+                } else {
+                    throw new NewDocumentCreateException(docTemplate);
+                }
+            } else {
+                throw new DefaultTemplateNotFoundException();
+            }
+        }
+
+        private IModelDoc2 OpenDocument() {
+            IModelDoc2 model;
+            int errorCode = -1;
+
+            if(m_NativeFileExts.TryGetValue(System.IO.Path.GetExtension(Path), out swDocumentTypes_e docType)) {
+                swOpenDocOptions_e opts = 0;
+
+                if(State.HasFlag(DocumentState_e.ReadOnly)) {
+                    opts |= swOpenDocOptions_e.swOpenDocOptions_ReadOnly;
+                }
+
+                if(State.HasFlag(DocumentState_e.ViewOnly)) {
+                    opts |= swOpenDocOptions_e.swOpenDocOptions_ViewOnly;
+                }
+
+                if(State.HasFlag(DocumentState_e.Silent)) {
+                    opts |= swOpenDocOptions_e.swOpenDocOptions_Silent;
+                }
+
+                if(State.HasFlag(DocumentState_e.Rapid)) {
+                    if(docType == swDocumentTypes_e.swDocDRAWING) {
+                        if(OwnerApplication.IsVersionNewerOrEqual(SwVersion_e.Sw2020)) {
+                            opts |= swOpenDocOptions_e.swOpenDocOptions_OpenDetailingMode;
+                        }
+                    } else if(docType == swDocumentTypes_e.swDocASSEMBLY) {
+                        opts |= swOpenDocOptions_e.swOpenDocOptions_ViewOnly;
+
+                        if(OwnerApplication.IsVersionNewerOrEqual(SwVersion_e.Sw2021, 4, 1)) {
+                            opts |= swOpenDocOptions_e.swOpenDocOptions_LDR_EditAssembly;
+                        }
+                    } else if(docType == swDocumentTypes_e.swDocPART) {
+                        //There is no rapid option for SOLIDWORKS part document
+                    }
+                }
+
+                if(State.HasFlag(DocumentState_e.Lightweight)) {
+                    if(docType == swDocumentTypes_e.swDocDRAWING
+                        || docType == swDocumentTypes_e.swDocASSEMBLY) {
+                        opts |= swOpenDocOptions_e.swOpenDocOptions_OverrideDefaultLoadLightweight | swOpenDocOptions_e.swOpenDocOptions_LoadLightweight;
+                    } else if(docType == swDocumentTypes_e.swDocPART) {
+                        //There is no rapid option for SOLIDWORKS part document
+                    }
+                } else {
+                    if(docType == swDocumentTypes_e.swDocDRAWING || docType == swDocumentTypes_e.swDocASSEMBLY) {
+                        opts |= swOpenDocOptions_e.swOpenDocOptions_OverrideDefaultLoadLightweight;
+                    } else if(docType == swDocumentTypes_e.swDocPART) {
+                        //There is no rapid option for SOLIDWORKS part document
+                    }
+                }
+
+                if(!IsDocumentTypeCompatible(docType)) {
+                    throw new DocumentPathIncompatibleException(this);
+                }
+
+                int warns = -1;
+                model = OwnerApplication.Sw.OpenDoc6(Path, (int)docType, (int)opts, "", ref errorCode, ref warns);
+            } else {
+                using(new Interconnect3DDisabler(OwnerApplication.Sw)) {
+                    model = OwnerApplication.Sw.LoadFile4(Path, "", null, ref errorCode);
+                }
+
+                if(model != null) {
+                    if(!IsDocumentTypeCompatible((swDocumentTypes_e)model.GetType())) {
+                        throw new DocumentPathIncompatibleException(this);
+                    }
+                }
+            }
+
+            if(model == null) {
+                string error = "";
+
+                switch((swFileLoadError_e)errorCode) {
+                    case swFileLoadError_e.swAddinInteruptError:
+                        error = "File opening was interrupted by the user";
+                        break;
+                    case swFileLoadError_e.swApplicationBusy:
+                        error = "Application is busy";
+                        break;
+                    case swFileLoadError_e.swFileCriticalDataRepairError:
+                        error = "File has critical data corruption";
+                        break;
+                    case swFileLoadError_e.swFileNotFoundError:
+                        error = "File not found at the specified path";
+                        break;
+                    case swFileLoadError_e.swFileRequiresRepairError:
+                        error = "File has non-critical data corruption and requires repair";
+                        break;
+                    case swFileLoadError_e.swFileWithSameTitleAlreadyOpen:
+                        error = "A document with the same name is already open";
+                        break;
+                    case swFileLoadError_e.swFutureVersion:
+                        error = "The document was saved in a future version of SOLIDWORKS";
+                        break;
+                    case swFileLoadError_e.swGenericError:
+                        error = "Unknown error while opening file";
+                        break;
+                    case swFileLoadError_e.swInvalidFileTypeError:
+                        error = "Invalid file type";
+                        break;
+                    case swFileLoadError_e.swLiquidMachineDoc:
+                        error = "File encrypted by Liquid Machines";
+                        break;
+                    case swFileLoadError_e.swLowResourcesError:
+                        error = "File is open and blocked because the system memory is low, or the number of GDI handles has exceeded the allowed maximum";
+                        break;
+                    case swFileLoadError_e.swNoDisplayData:
+                        error = "File contains no display data";
+                        break;
+                }
+
+                throw new OpenDocumentFailedException(Path, errorCode, error);
+            }
+
+            return model;
+        }
+
+        protected abstract bool IsDocumentTypeCompatible(swDocumentTypes_e docType);
+
+        protected virtual void GetPaperSize(out swDwgPaperSizes_e size, out double width, out double height) {
+            size = swDwgPaperSizes_e.swDwgPapersUserDefined;
+            width = -1;
+            height = -1;
+        }
+
+        //NOTE: closing of document migth note neecsserily unload if from memory (if this document is used in active assembly or drawing)
+        //do not dispose or set m_IsClosed flag in this function
+        public void Close()
+            => OwnerApplication.Sw.CloseDoc(Model.GetTitle());
+
+        public void Dispose() {
+            if(!m_IsDisposed) {
+                m_IsDisposed = true;
+
+                if(m_IsClosed != true) {
+                    if(IsAlive) {
+                        Close();
+                    }
+                }
+
+                Dispose(true);
+            }
+        }
+
+        protected virtual void Dispose(bool disposing) {
+            if(m_SelectionsLazy.IsValueCreated) {
+                m_SelectionsLazy.Value.Dispose();
+            }
+
+            if(m_DimensionsLazy.IsValueCreated) {
+                m_DimensionsLazy.Value.Dispose();
+            }
+
+            if(disposing) {
+                m_StreamReadAvailableHandler.Dispose();
+                m_StreamWriteAvailableHandler.Dispose();
+                m_StorageReadAvailableHandler.Dispose();
+                m_StorageWriteAvailableHandler.Dispose();
+
+                DetachEvents();
+            }
+        }
+
+        internal void AttachEvents() {
+            if(!m_AreEventsAttached) {
+                m_AreEventsAttached = true;
+
+                AttachDestroyEventsIfNeeded();
+
+                switch(Model) {
+                    case PartDoc part:
+                        part.FileSavePostNotify += OnFileSavePostNotify;
+                        break;
+
+                    case AssemblyDoc assm:
+                        assm.FileSavePostNotify += OnFileSavePostNotify;
+                        break;
+
+                    case DrawingDoc drw:
+                        drw.FileSavePostNotify += OnFileSavePostNotify;
+                        break;
+                }
+            } else {
+                Debug.Assert(false, "Events already attached");
+            }
+        }
+
+        private void AttachDestroyEventsIfNeeded() {
+            if(!m_AreDestroyEventsAttached && (m_DestroyedDel != null || m_HiddenDel != null || m_ClosingDel != null)) {
+                switch(Model) {
+                    case PartDoc part:
+                        part.DestroyNotify2 += OnDestroyNotify;
+                        break;
+
+                    case AssemblyDoc assm:
+                        assm.DestroyNotify2 += OnDestroyNotify;
+                        break;
+
+                    case DrawingDoc drw:
+                        drw.DestroyNotify2 += OnDestroyNotify;
+                        break;
+                }
+
+                m_AreDestroyEventsAttached = true;
+            }
+        }
+
+        private void DetachDestroyEventsIfNeeded() {
+            if(m_AreDestroyEventsAttached && (m_DestroyedDel == null && m_HiddenDel == null && m_ClosingDel == null)) {
+                switch(Model) {
+                    case PartDoc part:
+                        part.DestroyNotify2 -= OnDestroyNotify;
+                        break;
+
+                    case AssemblyDoc assm:
+                        assm.DestroyNotify2 -= OnDestroyNotify;
+                        break;
+
+                    case DrawingDoc drw:
+                        drw.DestroyNotify2 -= OnDestroyNotify;
+                        break;
+                }
+
+                m_AreDestroyEventsAttached = false;
+            }
+        }
+
+        private int OnFileSavePostNotify(int saveType, string fileName) {
+            if(saveType == (int)swFileSaveTypes_e.swFileSaveAs) {
+                m_CachedFilePath = fileName;
+            }
+
+            return HResult.S_OK;
+        }
+
+        private void DetachEvents() {
+            switch(Model) {
+                case PartDoc part:
+                    part.DestroyNotify2 -= OnDestroyNotify;
+                    part.FileSavePostNotify -= OnFileSavePostNotify;
+                    break;
+
+                case AssemblyDoc assm:
+                    assm.DestroyNotify2 -= OnDestroyNotify;
+                    assm.FileSavePostNotify -= OnFileSavePostNotify;
+                    break;
+
+                case DrawingDoc drw:
+                    drw.DestroyNotify2 -= OnDestroyNotify;
+                    drw.FileSavePostNotify -= OnFileSavePostNotify;
+                    break;
+            }
+        }
+
+        private int OnDestroyNotify(int destroyType) {
+            try {
+                if(destroyType == (int)swDestroyNotifyType_e.swDestroyNotifyDestroy) {
+                    m_Logger.Log($"Destroying '{Model.GetTitle()}' document", LoggerMessageSeverity_e.Debug);
+
+                    try {
+                        m_ClosingDel?.Invoke(this, DocumentCloseType_e.Destroy);
+                    } catch(Exception ex) {
+                        m_Logger.Log(ex);
+                    }
+
+                    m_DestroyedDel?.Invoke(this);
+
+                    m_IsClosed = true;
+
+                    Dispose();
+                } else if(destroyType == (int)swDestroyNotifyType_e.swDestroyNotifyHidden) {
+                    try {
+                        m_ClosingDel?.Invoke(this, DocumentCloseType_e.Hide);
+                    } catch(Exception ex) {
+                        m_Logger.Log(ex);
+                    }
+
+                    m_HiddenDel?.Invoke(this);
+
+                    m_Logger.Log($"Hiding '{Model.GetTitle()}' document", LoggerMessageSeverity_e.Debug);
+                } else {
+                    Debug.Assert(false, "Not supported type of destroy");
+                }
+            } catch(Exception ex) {
+                m_Logger.Log(ex);
+            }
+
+            return HResult.S_OK;
+        }
+
+        public Stream OpenStream(string name, AccessType_e access)
+            => new Sw3rdPartyStream(Model, name, access);
+
+        public IStorage OpenStorage(string name, AccessType_e access)
+            => new Sw3rdPartyStorage(Model, name, access);
+
+        public virtual void Commit(CancellationToken cancellationToken)
+            => m_Creator.Create(cancellationToken);
+
+        public void Save() {
+            if(!string.IsNullOrEmpty(Path)) {
+                int errs = -1;
+                int warns = -1;
+
+                if(!Model.Save3((int)swSaveAsOptions_e.swSaveAsOptions_Silent, ref errs, ref warns)) {
+                    throw new SaveDocumentFailedException(errs, SwSaveOperation.ParseSaveError((swFileSaveError_e)errs));
+                }
+            } else {
+                throw new SaveNeverSavedDocumentException();
+            }
+        }
+
+        public TSwObj DeserializeObject<TSwObj>(Stream stream)
+            where TSwObj : ISwObject
+            => DeserializeBaseObject<TSwObj>(stream);
+
+        private TObj DeserializeBaseObject<TObj>(Stream stream)
+            where TObj : ISwObject {
+            stream.Seek(0, SeekOrigin.Begin);
+
+            byte[] buffer;
+
+            using(var memoryStream = new MemoryStream()) {
+                stream.CopyTo(memoryStream);
+                buffer = memoryStream.ToArray();
+            }
+
+            var obj = Model.Extension.GetObjectByPersistReference3(buffer, out int err);
+
+            if(obj != null) {
+                return (TObj)CreateObjectFromDispatch<ISwObject>(obj);
+            } else {
+                string reason;
+
+                switch((swPersistReferencedObjectStates_e)err) {
+                    case swPersistReferencedObjectStates_e.swPersistReferencedObject_Deleted:
+                        reason = "Object is deleted";
+                        break;
+
+                    case swPersistReferencedObjectStates_e.swPersistReferencedObject_Invalid:
+                        reason = "Object is invalid";
+                        break;
+
+                    case swPersistReferencedObjectStates_e.swPersistReferencedObject_Suppressed:
+                        reason = "Object is suppressed";
+                        break;
+
+                    default:
+                        reason = "Unknown reason";
+                        break;
+                }
+
+                throw new ObjectSerializationException($"Failed to serialize object: {reason}", err);
+            }
+        }
+
+        public TObj CreateObjectFromDispatch<TObj>(object disp) where TObj : ISwObject
+            => SwObjectFactory.FromDispatch<TObj>(disp, this, OwnerApplication);
+
+        public void Rebuild() {
+            if(Model.ForceRebuild3(false)) {
+                //do not throw exception - in some cases rebuild is happening, but false is returned
+                //throw new Exception("Failed to rebuild the model");
+            }
+        }
+
+        public IOperationGroup PreCreateOperationGroup() => new SwUndoObjectGroup(this);
+
+        public abstract IXSaveOperation PreCreateSaveAsOperation(string filePath);
+    }
+
+    internal class SwUnknownDocument : SwDocument, IXUnknownDocument {
+        public SwUnknownDocument(IModelDoc2 model, SwApplication app, IXLogger logger, bool isCreated)
+            : base(model, app, logger, isCreated) {
+        }
+
+        protected override SwAnnotationCollection CreateAnnotations() => throw new NotSupportedException();
+
+        internal protected override swDocumentTypes_e? DocumentType {
+            get {
+                if(IsCommitted) {
+                    return (swDocumentTypes_e)Model.GetType();
+                } else {
+                    if(!string.IsNullOrEmpty(Path)) {
+                        if(m_NativeFileExts.TryGetValue(
+                            System.IO.Path.GetExtension(Path), out swDocumentTypes_e type)) {
+                            return type;
+                        } else {
+                            return null;
+                        }
+                    } else if(!string.IsNullOrEmpty(Template)) {
+                        if(m_NativeFileExts.TryGetValue(
+                            System.IO.Path.GetExtension(Template), out swDocumentTypes_e type)) {
+                            return type;
+                        } else {
+                            return null;
+                        }
+                    } else {
+                        return null;
+                    }
+                }
+            }
+        }
+
+        public override void Commit(CancellationToken cancellationToken) {
+            if(((SwDocumentCollection)OwnerApplication.Documents).TryFindExistingDocumentByPath(Path, out SwDocument curDoc)) {
+                m_SpecificDoc = curDoc;
+                m_Creator.Init(curDoc.Model, CancellationToken.None);
+            } else {
+                base.Commit(cancellationToken);
+            }
+        }
+
+        private ISwDocument m_SpecificDoc;
+
+        public ISwDocument GetSpecific() {
+            if(m_SpecificDoc != null) {
+                return m_SpecificDoc;
+            }
+
+            var model = Model;
+
+            if(model == null) {
+                throw new Exception("Model is not yet created, cannot get specific document");
+            }
+
+            switch(DocumentType) {
+                case swDocumentTypes_e.swDocPART:
+                    m_SpecificDoc = new SwPart(model as IPartDoc, OwnerApplication, m_Logger, true);
+                    break;
+
+                case swDocumentTypes_e.swDocASSEMBLY:
+                    m_SpecificDoc = new SwAssembly(model as IAssemblyDoc, OwnerApplication, m_Logger, true);
+                    break;
+
+                case swDocumentTypes_e.swDocDRAWING:
+                    m_SpecificDoc = new SwDrawing(model as IDrawingDoc, OwnerApplication, m_Logger, true);
+                    break;
+
+                default:
+                    throw new Exception("Invalid document type");
+            }
+
+            return m_SpecificDoc;
+        }
+
+        protected override bool IsDocumentTypeCompatible(swDocumentTypes_e docType) => true;
+
+        public override IXSaveOperation PreCreateSaveAsOperation(string filePath) => throw new NotSupportedException();
+    }
+
+    internal class SwUnknownDocument3D : SwUnknownDocument, ISwDocument3D {
+        public SwUnknownDocument3D(IModelDoc2 model, SwApplication app, IXLogger logger, bool isCreated)
+            : base(model, app, logger, isCreated) {
+        }
+
+        public ISwConfigurationCollection Configurations => throw new NotImplementedException();
+        ISwConfigurationCollection ISwDocument3D.Configurations => throw new NotImplementedException();
+        ISwModelViews3DCollection ISwDocument3D.ModelViews => throw new NotImplementedException();
+        TSelObject ISwDocument3D.ConvertObject<TSelObject>(TSelObject obj) => throw new NotImplementedException();
+    }
+
+    internal static class SwDocumentExtension {
+        internal static Image GetThumbnailImage(this SwDocument doc) {
+            using(var thumbnail = new ShellThumbnail(doc.Path)) {
+                return Image.FromHbitmap(thumbnail.BitmapHandle);
+            }
+        }
+
+        internal static void SetUserPreferenceToggle(this SwDocument doc, swUserPreferenceToggle_e option, bool value)
+            => doc.Model.Extension.SetUserPreferenceToggle((int)option, (int)swUserPreferenceOption_e.swDetailingNoOptionSpecified, value);
+
+        internal static bool GetUserPreferenceToggle(this SwDocument doc, swUserPreferenceToggle_e option)
+            => doc.Model.Extension.GetUserPreferenceToggle((int)option, (int)swUserPreferenceOption_e.swDetailingNoOptionSpecified);
+
+        internal static void Bind(this SwDocument doc, IModelDoc2 model) {
+            if(!doc.IsCommitted) {
+                doc.SetModel(model);
+            }
+
+            if(doc.IsCommitted) {
+                if(!(doc is SwUnknownDocument)) {
+                    doc.AttachEvents();
+                }
+            }
+        }
+    }
+}

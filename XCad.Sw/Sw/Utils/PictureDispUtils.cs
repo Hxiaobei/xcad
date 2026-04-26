@@ -1,0 +1,27 @@
+﻿//*********************************************************************
+//xCAD
+//Copyright(C) 2024 Xarial Pty Limited
+//Product URL: https://www.xcad.net
+//License: https://xcad.xarial.com/license/
+//*********************************************************************
+
+using System;
+using System.Drawing;
+using XCad.UI;
+
+namespace XCad.Sw.Utils {
+    internal static class PictureDispUtils {
+        internal static IXImage PictureDispToXImage(object pictDisp) {
+            if(pictDisp == null) {
+                throw new NullReferenceException("Failed to extract IPictureDisp from the document");
+            }
+
+            var getPictureFromIPictureFunc = typeof(System.Windows.Forms.AxHost)
+                .GetMethod("GetPictureFromIPicture", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+            var bmp = getPictureFromIPictureFunc.Invoke(null, new object[] { pictDisp }) as Bitmap;
+
+            return new XDrawingImage(bmp);
+        }
+    }
+}

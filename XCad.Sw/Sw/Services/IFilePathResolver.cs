@@ -1,0 +1,12 @@
+﻿//*********************************************************************
+//xCAD
+//Copyright(C) 2024 Xarial Pty Limited
+//Product URL: https://www.xcad.net
+//License: https://xcad.xarial.com/license/
+//*********************************************************************
+
+namespace XCad.Sw.Services {
+    public interface IFilePathResolver {
+        string ResolvePath(string parentDocPath, string path);
+    }
+}

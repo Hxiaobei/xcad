@@ -1,0 +1,41 @@
+﻿
+using System.Diagnostics;
+
+namespace XCad.Structures {
+    /// <summary>
+    /// Represents thickness
+    /// </summary>
+    /// <remarks>Usually used to define margin and padding</remarks>
+    [DebuggerDisplay("{" + nameof(Left) + "} {" + nameof(Right) + "} {" + nameof(Top) + "} {" + nameof(Bottom) + "}")]
+    public class Thickness {
+        /// <summary>
+        /// Left width
+        /// </summary>
+        public double Left { get; }
+
+        /// <summary>
+        /// Right width
+        /// </summary>
+        public double Right { get; }
+
+        /// <summary>
+        /// Toip width
+        /// </summary>
+        public double Top { get; }
+
+        /// <summary>
+        /// Bottom width
+        /// </summary>
+        public double Bottom { get; }
+
+        /// <summary>
+        /// Default constructor
+        /// </summary>
+        public Thickness(double left, double right, double top, double bottom) {
+            Left = left;
+            Right = right;
+            Top = top;
+            Bottom = bottom;
+        }
+    }
+}

@@ -1,0 +1,18 @@
+﻿//*********************************************************************
+//xCAD
+//Copyright(C) 2024 Xarial Pty Limited
+//Product URL: https://www.xcad.net
+//License: https://xcad.xarial.com/license/
+//*********************************************************************
+
+namespace XCad.UI.PropertyPage.Base {
+    /// <summary>
+    /// Represents the custom metadata which is used by controls
+    /// </summary>
+    public interface IMetadataAttribute : IAttribute {
+        /// <summary>
+        /// Tag of the metadata
+        /// </summary>
+        object Tag { get; }
+    }
+}

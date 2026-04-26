@@ -1,0 +1,38 @@
+﻿//*********************************************************************
+//xCAD
+//Copyright(C) 2024 Xarial Pty Limited
+//Product URL: https://www.xcad.net
+//License: https://xcad.xarial.com/license/
+//*********************************************************************
+
+namespace XCad.UI.Enums {
+    /// <summary>
+    /// Dock for the popup window
+    /// </summary>
+    public enum PopupDock_e {
+        /// <summary>
+        /// Center of the parent Window
+        /// </summary>
+        Center,
+
+        /// <summary>
+        /// Top right corner of the parent window
+        /// </summary>
+        TopRight,
+
+        /// <summary>
+        /// Bottom right corner of the parent window
+        /// </summary>
+        BottomRight,
+
+        /// <summary>
+        /// Top left corner of the parent window
+        /// </summary>
+        TopLeft,
+
+        /// <summary>
+        /// Bottom left corner of the parent window
+        /// </summary>
+        BottomLeft
+    }
+}

@@ -1,0 +1,17 @@
+﻿//*********************************************************************
+//xCAD
+//Copyright(C) 2024 Xarial Pty Limited
+//Product URL: https://www.xcad.net
+//License: https://xcad.xarial.com/license/
+//*********************************************************************
+
+using System;
+
+namespace XCad.Sw.Features.CustomFeature.Attributes {
+    /// <summary>
+    /// Indicates that this property should not be considered as macro feature parameter
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Property)]
+    public class ParameterExcludeAttribute : Attribute {
+    }
+}

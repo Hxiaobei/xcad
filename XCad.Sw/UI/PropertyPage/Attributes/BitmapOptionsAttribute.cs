@@ -1,0 +1,32 @@
+﻿//*********************************************************************
+//xCAD
+//Copyright(C) 2024 Xarial Pty Limited
+//Product URL: https://www.xcad.net
+//License: https://xcad.xarial.com/license/
+//*********************************************************************
+
+using System;
+using System.Drawing;
+using XCad.UI.PropertyPage.Base;
+
+namespace XCad.UI.PropertyPage.Attributes {
+    /// <summary>
+    /// Additional options for bitmap control
+    /// </summary>
+    /// <remarks>Applied to property of type <see cref="Image"/></remarks>
+    public class BitmapOptionsAttribute : Attribute, IAttribute {
+        /// <summary>
+        /// Size of the bitmap
+        /// </summary>
+        public Size Size { get; }
+
+        /// <summary>
+        /// Constructor for bitmap options
+        /// </summary>
+        /// <param name="width">Width of the bitmap</param>
+        /// <param name="height">Height of the bitmap</param>
+        public BitmapOptionsAttribute(int width, int height) {
+            Size = new Size(width, height);
+        }
+    }
+}
