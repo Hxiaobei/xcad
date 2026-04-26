@@ -6,7 +6,7 @@
 		<TargetFrameworks>net48</TargetFrameworks>
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<PackageId>XCad.Sw</PackageId>
-		<Version>1.0.0</Version>
+		<Version>1.0.2</Version>
 		<Authors>Xarial</Authors>
 		<Company>Xarial</Company>
 		<Description>Framework for developing SolidWorks add-ins and applications.</Description>
@@ -18,6 +18,10 @@
 		<RepositoryUrl>https://github.com/Hxiaobei/xcad.git</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="..\thirdpty\SolidWorks.Interop.*.dll" Pack="true" PackagePath="lib\net48" />
+	</ItemGroup>
 
 	<PropertyGroup Condition="'$(Configuration)'=='Release'">
 		<DocumentationFile>Xarial.XCad.xml</DocumentationFile>
@@ -31,17 +35,14 @@
 		
 		<Reference Include="SolidWorks.Interop.sldworks">
 		  <HintPath>..\thirdpty\SolidWorks.Interop.sldworks.dll</HintPath>
-		  <PrivateAssets>all</PrivateAssets>
 		</Reference>
 		
 		<Reference Include="SolidWorks.Interop.swconst">
 		  <HintPath>..\thirdpty\SolidWorks.Interop.swconst.dll</HintPath>
-		  <PrivateAssets>all</PrivateAssets>
 		</Reference>
 		
 		<Reference Include="SolidWorks.Interop.swpublished">
 		  <HintPath>..\thirdpty\SolidWorks.Interop.swpublished.dll</HintPath>
-		  <PrivateAssets>all</PrivateAssets>
 		</Reference>
 		
 		<Reference Include="System.Windows.Forms" />

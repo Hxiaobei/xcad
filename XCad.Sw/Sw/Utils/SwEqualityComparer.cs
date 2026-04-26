@@ -1,7 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using SolidWorks.Interop.swconst;
-using XCad.Sw;
-namespace SwMsg.Extension {
+namespace XCad.Sw.Utils {
     public class SwEqualityComparer<T> : IEqualityComparer<T> {
         public bool Equals(T x, T y) => SwUtils.Sw.IsSame(x, y) == (int)swObjectEquality.swObjectSame;
 
