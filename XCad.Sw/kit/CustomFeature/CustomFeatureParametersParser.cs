@@ -19,6 +19,26 @@ using XCad.Sw.Geometry;
 
 namespace XCad.kit.CustomFeature {
     /// <summary>
+    /// Structured result of parsing custom feature parameters
+    /// </summary>
+    public class ParseResult {
+        public CustomFeatureAttribute[] Attributes { get; }
+        public ISwSelObject[] Selections { get; }
+        public CustomFeatureDimensionType_e[] DimTypes { get; }
+        public double[] DimValues { get; }
+        public ISwBody[] EditBodies { get; }
+
+        internal ParseResult(CustomFeatureAttribute[] atts, ISwSelObject[] sels,
+            CustomFeatureDimensionType_e[] dimTypes, double[] dimVals, ISwBody[] editBodies) {
+            Attributes = atts;
+            Selections = sels;
+            DimTypes = dimTypes;
+            DimValues = dimVals;
+            EditBodies = editBodies;
+        }
+    }
+
+    /// <summary>
     /// Helper utility allowing to parse and convert parameters of the custom feature to the class
     /// </summary>
     public class CustomFeatureParametersParser {
@@ -213,9 +233,7 @@ namespace XCad.kit.CustomFeature {
         /// <summary>
         /// Parses the custom feature data from the parameters structure
         /// </summary>
-        public void Parse(object parameters,
-            out CustomFeatureAttribute[] atts, out ISwSelObject[] selection,
-            out CustomFeatureDimensionType_e[] dimTypes, out double[] dimValues, out ISwBody[] editBodies) {
+        public ParseResult Parse(object parameters) {
             if(parameters == null) {
                 throw new ArgumentNullException(nameof(parameters));
             }
@@ -243,37 +261,38 @@ namespace XCad.kit.CustomFeature {
                     paramAttsList.Add(new CustomFeatureAttribute(prp.Name, prp.PropertyType, val));
                 });
 
-            // 简化版本特性获取
+            // 版本特性处理
             var versionAttr = parameters.GetType().TryGetAttribute<ParametersVersionAttribute>();
             if(versionAttr != null) {
-                var setVersionFunc = new Action<string, Version>((n, v) => {
+                void SetVersionParam(string n, Version v) {
                     var versParamIndex = paramAttsList.FindIndex(l => l.Name == n);
-
                     if(versParamIndex == -1) {
                         paramAttsList.Add(new CustomFeatureAttribute(n, typeof(string), v.ToString()));
                     } else {
                         var curParam = paramAttsList[versParamIndex];
                         paramAttsList[versParamIndex] = new CustomFeatureAttribute(curParam.Name, curParam.Type, v.ToString());
                     }
-                });
+                }
 
-                setVersionFunc.Invoke(VERSION_PARAMETERS_NAME, versionAttr.Version);
-                setVersionFunc.Invoke(VERSION_DIMENSIONS_NAME, versionAttr.Version);
+                SetVersionParam(VERSION_PARAMETERS_NAME, versionAttr.Version);
+                SetVersionParam(VERSION_DIMENSIONS_NAME, versionAttr.Version);
             }
 
-            selection = AddParametersForObjects(selectionList, paramAttsList);
+            var selection = AddParametersForObjects(selectionList, paramAttsList);
             var dimParams = AddParametersForObjects(dimsList, paramAttsList);
-            editBodies = AddParametersForObjects(editBodiesList, paramAttsList);
+            var editBodies = AddParametersForObjects(editBodiesList, paramAttsList);
 
-            atts = paramAttsList.ToArray();
+            var atts = paramAttsList.ToArray();
+
+            CustomFeatureDimensionType_e[] dimTypes = null;
+            double[] dimValues = null;
 
             if(dimParams != null) {
                 dimTypes = dimParams.Select(d => d.Type).ToArray();
                 dimValues = dimParams.Select(d => d.Value).ToArray();
-            } else {
-                dimTypes = null;
-                dimValues = null;
             }
+
+            return new ParseResult(atts, selection, dimTypes, dimValues, editBodies);
         }
 
         /// <summary>
@@ -362,14 +381,15 @@ namespace XCad.kit.CustomFeature {
                     .Distinct()
                     .Where(o => o != null).ToList();
 
+                // 优化：建立索引映射，O(n) 替代原 IndexOf 的 O(n²)
+                var indexMap = new Dictionary<T, int>();
+                for(int i = 0; i < allObjects.Count; i++) {
+                    if(!indexMap.ContainsKey(allObjects[i]))
+                        indexMap[allObjects[i]] = i;
+                }
+
                 var paramsGroup = objects.GroupBy(o => o.PropertyName).ToDictionary(g => g.Key,
-                    g => {
-                        return string.Join(",", g.Select(
-                            e => {
-                                var index = allObjects.IndexOf(e.Object);
-                                return index;
-                            }).ToArray());
-                    });
+                    g => string.Join(",", g.Select(e => indexMap[e.Object].ToString()).ToArray()));
 
                 paramList.AddRange(paramsGroup.Select(g => new CustomFeatureAttribute(g.Key, typeof(string), g.Value)));
 

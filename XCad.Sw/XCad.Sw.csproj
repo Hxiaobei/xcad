@@ -4,9 +4,10 @@
 		<AssemblyName>XCad.Sw</AssemblyName>
 		<RootNamespace>XCad</RootNamespace>
 		<TargetFrameworks>net48</TargetFrameworks>
+		<LangVersion>latest</LangVersion>
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<PackageId>XCad.Sw</PackageId>
-		<Version>1.0.5</Version>
+		<Version>1.0.6</Version>
 		<Authors>Xarial</Authors>
 		<Company>Xarial</Company>
 		<Description>Framework for developing SolidWorks add-ins and applications.</Description>
@@ -21,6 +22,10 @@
 
 	<ItemGroup>
 		<None Include="..\thirdpty\SolidWorks.Interop.*.dll" Pack="true" PackagePath="lib\net48" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all" />
 	</ItemGroup>
 
 	<PropertyGroup Condition="'$(Configuration)'=='Release'">

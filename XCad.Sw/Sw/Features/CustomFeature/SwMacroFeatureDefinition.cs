@@ -318,8 +318,11 @@ namespace XCad.Sw.Features.CustomFeature {
             int OnIdleNotify() {
                 m_IsSubscribedToIdle = false;
                 ((SldWorks)App.Sw).OnIdleNotify -= OnIdleNotify;
-                m_RebuildFeaturesQueue.ForEach(DispatchPostBuildData);
-                m_RebuildFeaturesQueue.Clear();
+                try {
+                    m_RebuildFeaturesQueue.ForEach(DispatchPostBuildData);
+                } finally {
+                    m_RebuildFeaturesQueue.Clear();
+                }
                 return HResult.S_OK;
             }
 

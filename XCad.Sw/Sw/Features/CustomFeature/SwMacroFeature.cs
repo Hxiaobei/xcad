@@ -293,35 +293,30 @@ namespace XCad.Sw.Features.CustomFeature {
 
         private IFeature InsertComFeatureWithParameters() {
 
-            m_ParamsParser.Parse(
-                Parameters, out CustomFeatureAttribute[] atts, out ISwSelObject[] selection,
-                out CustomFeatureDimensionType_e[] dimTypes, out double[] dimValues,
-                out ISwBody[] editBodies);
+            var parsed = m_ParamsParser.Parse(Parameters);
 
-            SeparateParameters(atts, out string[] paramNames, out int[] paramTypes, out string[] paramValues);
+            SeparateParameters(parsed.Attributes, out string[] paramNames, out int[] paramTypes, out string[] paramValues);
 
             //TODO: add dim types conversion
 
             return InsertComFeatureBase(
                 paramNames, paramTypes, paramValues,
-                dimTypes?.Select(d => (int)d)?.ToArray(), dimValues,
-                selection.ToSwArray<SwSelObject>()?.Select(s => s.Dispatch)?.ToArray(),
-                editBodies.ToSwArray<SwBody>()?.Select(b => b.Body)?.ToArray());
+                parsed.DimTypes?.Select(d => (int)d)?.ToArray(), parsed.DimValues,
+                parsed.Selections.ToSwArray<SwSelObject>()?.Select(s => s.Dispatch)?.ToArray(),
+                parsed.EditBodies.ToSwArray<SwBody>()?.Select(b => b.Body)?.ToArray());
         }
 
         private void WriteParameters(object parameters, out CustomFeatureOutdateState_e state) {
 
-            m_ParamsParser.Parse(parameters,
-                out CustomFeatureAttribute[] param,
-                out ISwSelObject[] selection, out _, out double[] dimValues, out ISwBody[] bodies);
+            var parsed = m_ParamsParser.Parse(parameters);
 
             var dispDims = GetDimensions();
-            if(dispDims != null && dispDims.Length != dimValues.Length)
+            if(dispDims != null && dispDims.Length != parsed.DimValues.Length)
                 throw new ParametersMismatchException("Dimensions mismatch");
 
             state = GetState(dispDims);
 
-            SetParametersToFeature(selection, bodies, dispDims, dimValues, param);
+            SetParametersToFeature(parsed.Selections, parsed.EditBodies, dispDims, parsed.DimValues, parsed.Attributes);
         }
 
         private void ExtractRawParameters(out Dictionary<string, object> parameters,

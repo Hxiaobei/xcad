@@ -167,13 +167,14 @@ namespace XCad.kit.CustomFeature {
         }
 
         private void HideEditBodies() {
-            var (_, _, _, _, editBodies) = ParseParameters(m_CurrentFeature.Parameters); // 5个元素，对应 atts, sels, extraData, dimVals, editBodies
-            var bodiesToShow = m_HiddenEditBodies.ToSwArray<ISwBody>().Except(editBodies.ToSwArray<ISwBody>(), m_BodiesComparer);
+            var parsed = m_ParamsParser.Parse(m_CurrentFeature.Parameters);
+            var editBodies = parsed.EditBodies ?? Array.Empty<ISwBody>();
+            var bodiesToShow = m_HiddenEditBodies.ToSwArray<ISwBody>().Except(editBodies, m_BodiesComparer);
             foreach(var body in bodiesToShow)
                 body.Visible = true;
 
             var doNotHideBodies = new List<ISwBody>();
-            var bodiesToHide = editBodies.ToSwArray<ISwBody>().Except(m_HiddenEditBodies.ToSwArray<ISwBody>(), m_BodiesComparer);
+            var bodiesToHide = editBodies.Except(m_HiddenEditBodies.ToSwArray<ISwBody>(), m_BodiesComparer);
 
             foreach(var body in bodiesToHide) {
                 bool hide = body.Visible && Definition.ShouldHidePreviewEditBody(body, m_CurrentFeature.Parameters, m_CurPageData);
@@ -220,13 +221,13 @@ namespace XCad.kit.CustomFeature {
             if(ReferenceEquals(oldParams, newParams)) return true;
             if(oldParams == null || newParams == null) return false;
 
-            var (oldAtts, oldSels, _, oldDimVals, oldEditBodies) = ParseParameters(oldParams);
-            var (newAtts, newSels, _, newDimVals, newEditBodies) = ParseParameters(newParams);
+            var oldParsed = m_ParamsParser.Parse(oldParams);
+            var newParsed = m_ParamsParser.Parse(newParams);
 
-            return AreArraysEqual(oldAtts, newAtts, (o, n) => string.Equals(o.Name, n.Name) && Equals(o.Value, n.Value) && Type.Equals(o.Type, n.Type))
-                && AreArraysEqual(oldSels, newSels, (o, n) => o.Equals(n))
-                && AreArraysEqual(oldDimVals, newDimVals, (o, n) => double.Equals(o, n))
-                && AreArraysEqual(oldEditBodies, newEditBodies, (o, n) => m_BodiesComparer.Equals(o, n));
+            return AreArraysEqual(oldParsed.Attributes, newParsed.Attributes, (o, n) => string.Equals(o.Name, n.Name) && Equals(o.Value, n.Value) && Type.Equals(o.Type, n.Type))
+                && AreArraysEqual(oldParsed.Selections, newParsed.Selections, (o, n) => o.Equals(n))
+                && AreArraysEqual(oldParsed.DimValues, newParsed.DimValues, (o, n) => double.Equals(o, n))
+                && AreArraysEqual(oldParsed.EditBodies, newParsed.EditBodies, (o, n) => m_BodiesComparer.Equals(o, n));
         }
 
         private static bool AreArraysEqual<T>(T[] a, T[] b, Func<T, T, bool> comparer) {
@@ -240,10 +241,6 @@ namespace XCad.kit.CustomFeature {
         }
 
         // 修正：Parse 方法只有 5 个 out 参数，因此返回 5 元组
-        private (CustomFeatureAttribute[] atts, ISwSelObject[] sels, object extraData, double[] dimVals, ISwBody[] editBodies) ParseParameters(TData data) {
-            m_ParamsParser.Parse(data, out var atts, out var sels, out var extraData, out var dimVals, out var editBodies);
-            return (atts, sels, extraData, dimVals, editBodies);
-        }
 
         private void OnPageClosed(PageCloseReasons_e reason) {
             if(m_IsApplying) reason = PageCloseReasons_e.Apply;
@@ -353,9 +350,12 @@ namespace XCad.kit.CustomFeature {
         }
 
         /// <summary>
-        /// 集中清理所有可变状态，确保异常时也能完整 reset (优化6)
+        /// 集中清理所有可变状态，确保异常时也能完整 reset
         /// </summary>
         private void ResetState() {
+            ShowEditBodies();
+            m_CurEditor?.Dispose();
+
             m_CurPageData = null;
             m_HiddenEditBodies = null;
             m_CurrentFeature = null;

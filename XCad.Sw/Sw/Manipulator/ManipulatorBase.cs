@@ -51,11 +51,20 @@ namespace XCad.Sw.Manipulator {
 
             try {
                 _manipulator?.Remove();
-                if(_manipulator != null) Marshal.ReleaseComObject(_manipulator);
-                if(_mp != null) Marshal.ReleaseComObject(_mp);
+            } catch { }
+
+            try {
+                if(_manipulator != null && Marshal.IsComObject(_manipulator))
+                    Marshal.ReleaseComObject(_manipulator);
+            } catch { }
+
+            try {
+                if(_mp != null && Marshal.IsComObject(_mp))
+                    Marshal.ReleaseComObject(_mp);
             } catch { }
 
             m_IsDisposed = true;
+            GC.SuppressFinalize(this);
         }
 
         ~ManipulatorBase() {
