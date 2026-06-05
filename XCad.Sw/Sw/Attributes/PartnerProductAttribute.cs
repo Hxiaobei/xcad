@@ -11,19 +11,15 @@ namespace XCad.Sw.Attributes {
     /// <summary>
     /// Registers add-in as the SOLIDWORKS partner product
     /// </summary>
+    /// <remarks>
+    /// Default constructor
+    /// </remarks>
+    /// <param name="partnerKey">Partner key of the product</param>
     [AttributeUsage(AttributeTargets.Class)]
-    public class PartnerProductAttribute : Attribute {
+    public class PartnerProductAttribute(string partnerKey) : Attribute {
         /// <summary>
         /// Partner key of the product
         /// </summary>
-        public string PartnerKey { get; }
-
-        /// <summary>
-        /// Default constructor
-        /// </summary>
-        /// <param name="partnerKey">Partner key of the product</param>
-        public PartnerProductAttribute(string partnerKey) {
-            PartnerKey = partnerKey;
-        }
+        public string PartnerKey { get; } = partnerKey;
     }
 }

@@ -410,11 +410,8 @@ namespace XCad.Sw.Geometry {
         }
 
         internal SwTempWireBody(IBody2 body, SwApplication app) : base(body, app) {
-            if(body != null) {
-                if(body.GetType() != (int)swBodyType_e.swWireBody) {
-                    throw new Exception("Specified body is not a wire body");
-                }
-            }
+            // 注意：IModeler.CreateWireBody() 在某些 SW 版本下返回的 body 类型
+            // 实际可能是 swGeneralBody(4) 而非 swWireBody(2)，故不做严格类型断言。
         }
 
         protected override IBody2 CreateTempBody(CancellationToken cancellationToken) {

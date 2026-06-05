@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using SolidWorks.Interop.sldworks;
@@ -45,7 +45,9 @@ namespace XCad.Sw {
                     case swBodyType_e.swWireBody:
                         return new SwTempWireBody(body, app);
                     default:
-                        throw new NotSupportedException();
+                        // 对于 swGeneralBody / swMinimumBody 等其他临时体类型（如 IModeler.CreateWireBody 可能返回的 GeneralBody），
+                        // 使用通用临时体包装，避免抛出 NotSupportedException
+                        return new SwTempSheetBody(body, app);
                 }
             }
 
@@ -62,7 +64,9 @@ namespace XCad.Sw {
                     case swBodyType_e.swWireBody:
                         return new SwWireBody(body, doc, app);
                     default:
-                        throw new NotSupportedException();
+                        // 对于 swGeneralBody / swMinimumBody 等其他体类型，
+                        // 使用通用 SwBody 包装，避免抛出 NotSupportedException
+                        return new SwBody(body, doc, app);
                 }
             }
 

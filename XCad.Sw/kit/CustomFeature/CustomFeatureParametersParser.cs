@@ -389,7 +389,7 @@ namespace XCad.kit.CustomFeature {
                 }
 
                 var paramsGroup = objects.GroupBy(o => o.PropertyName).ToDictionary(g => g.Key,
-                    g => string.Join(",", g.Select(e => indexMap[e.Object].ToString()).ToArray()));
+                    g => string.Join(",", g.Select(e => e.Object == null ? "-1" : indexMap[e.Object].ToString()).ToArray()));
 
                 paramList.AddRange(paramsGroup.Select(g => new CustomFeatureAttribute(g.Key, typeof(string), g.Value)));
 

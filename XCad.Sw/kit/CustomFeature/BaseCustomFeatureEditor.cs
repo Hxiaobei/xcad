@@ -243,6 +243,9 @@ namespace XCad.kit.CustomFeature {
         // 修正：Parse 方法只有 5 个 out 参数，因此返回 5 元组
 
         private void OnPageClosed(PageCloseReasons_e reason) {
+            try {
+                System.IO.File.AppendAllText(@"E:\code\Git\Msg.Sw\debug_copygeom.txt", $"OnPageClosed: reason={reason}\n");
+            } catch {}
             if(m_IsApplying) reason = PageCloseReasons_e.Apply;
 
             var cachedParams = m_CurrentFeature.Parameters;
@@ -267,6 +270,9 @@ namespace XCad.kit.CustomFeature {
                     m_PmPage.IsPinned = true;
                 }
             } catch(Exception ex) {
+                try {
+                    System.IO.File.AppendAllText(@"E:\code\Git\Msg.Sw\debug_copygeom.txt", $"OnPageClosed exception: {ex.GetType().FullName}: {ex.Message}\nStack trace:\n{ex.StackTrace}\n");
+                } catch {}
                 m_Logger.Log(ex);
                 m_CurEditor?.Dispose();
                 ResetState();
@@ -282,6 +288,9 @@ namespace XCad.kit.CustomFeature {
         }
 
         private void OnPageClosing(PageCloseReasons_e reason, PageClosingArg arg) {
+            try {
+                System.IO.File.AppendAllText(@"E:\code\Git\Msg.Sw\debug_copygeom.txt", $"OnPageClosing: reason={reason}, m_LastError={(m_LastError != null ? m_LastError.Message : "null")}\n");
+            } catch {}
             if(m_IsApplying) return;
 
             if(EditingCompleting != null) {
@@ -325,6 +334,9 @@ namespace XCad.kit.CustomFeature {
                     if(m_PreviewBodies?.Any() == true)
                         DisplayPreview(m_PreviewBodies);
                 } catch(Exception ex) {
+                    try {
+                        System.IO.File.AppendAllText(@"E:\code\Git\Msg.Sw\debug_copygeom.txt", $"UpdatePreview exception: {ex.GetType().FullName}: {ex.Message}\nStack trace:\n{ex.StackTrace}\n");
+                    } catch {}
                     HidePreviewBodies();
                     ShowEditBodies();
                     m_Logger.Log(ex);

@@ -63,7 +63,7 @@ namespace XCad.Sw.Sketch {
             throw new NotImplementedException();
         }
 
-        protected Vec3d CreatePoint(ISketchPoint pt) => new Vec3d(pt.X, pt.Y, pt.Z);
+        protected Vec3d CreatePoint(ISketchPoint pt) => new(pt.X, pt.Y, pt.Z);
 
         protected void SetPoint(ISketchPoint pt, Vec3d coord) {
             pt.X = coord.X;

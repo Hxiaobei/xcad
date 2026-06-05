@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -157,10 +157,7 @@ namespace XCad.Sw.Features.CustomFeature {
         Transform GetEntityTransformation(ISwSelObject entity);
     }
 
-    internal class SwMacroFeatureEditor : SwFeatureEditor<IMacroFeatureData> {
-        public SwMacroFeatureEditor(SwFeature feat, IMacroFeatureData featData) : base(feat, featData) {
-        }
-
+    internal class SwMacroFeatureEditor(SwFeature feat, IMacroFeatureData featData) : SwFeatureEditor<IMacroFeatureData>(feat, featData) {
         protected override void CancelEdit(IMacroFeatureData featData) => featData.ReleaseSelectionAccess();
 
         protected override bool StartEdit(IMacroFeatureData featData, ISwDocument doc, ISwComponent comp)

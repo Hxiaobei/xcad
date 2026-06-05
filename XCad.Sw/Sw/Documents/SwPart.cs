@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using XCad.Sw.Base;
@@ -40,12 +40,8 @@ namespace XCad.Sw.Documents {
         protected override bool IsDocumentTypeCompatible(swDocumentTypes_e docType) => docType == swDocumentTypes_e.swDocPART;
     }
 
-    internal class SwPartBodyCollection : SwBodyCollection {
-        private SwPart m_Part;
-
-        public SwPartBodyCollection(SwPart rootDoc) : base(rootDoc) {
-            m_Part = rootDoc;
-        }
+    internal class SwPartBodyCollection(SwPart rootDoc) : SwBodyCollection(rootDoc) {
+        private readonly SwPart m_Part = rootDoc;
 
         protected override IEnumerable<IBody2> SelectSwBodies(swBodyType_e bodyType)
             => m_Part.Part.GetBodies2((int)bodyType, false).ToSwArray<IBody2>();
