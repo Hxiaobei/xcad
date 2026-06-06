@@ -241,21 +241,29 @@ namespace XCad.Sw.Features.CustomFeature {
 
             CustomFeatureDefinitionInstanceCache.RegisterInstance(this);
 
-            TryCreateIcons(m_SvcProvider.GetService<IIconsCreator>(), MacroFeatureIconInfo.GetLocation(GetType()));
+            CreateIcons(m_SvcProvider.GetService<IIconsCreator>(), MacroFeatureIconInfo.GetLocation(GetType()));
+        }
 
-            void TryCreateIcons(IIconsCreator ic, string folder) {
-                var icon = GetType().TryGetAttribute<IconAttribute>()?.Icon ?? Defaults.Icon;
+        /// <summary>
+        /// 创建宏特征的各类图标（普通、高亮、抑制、高分辨率等）
+        /// </summary>
+        /// <param name="ic">图标创建器</param>
+        /// <param name="folder">图标输出目录</param>
+        /// <remarks>子类可重写以自定义图标创建逻辑或跳过图标创建</remarks>
+        protected virtual void CreateIcons(IIconsCreator ic, string folder) {
+            if(ic == null) return;
 
-                try {
-                    ic.ConvertIcon(new MacroFeatureIcon(icon, MacroFeatureIconInfo.RegularName), folder);
-                    ic.ConvertIcon(new MacroFeatureIcon(icon, MacroFeatureIconInfo.HighlightedName), folder);
-                    ic.ConvertIcon(new MacroFeatureSuppressedIcon(icon, MacroFeatureIconInfo.SuppressedName), folder);
-                    ic.ConvertIcon(new MacroFeatureHighResIcon(icon, MacroFeatureIconInfo.RegularName), folder);
-                    ic.ConvertIcon(new MacroFeatureHighResIcon(icon, MacroFeatureIconInfo.HighlightedName), folder);
-                    ic.ConvertIcon(new MacroFeatureSuppressedHighResIcon(icon, MacroFeatureIconInfo.SuppressedName), folder);
-                } catch(Exception ex) {
-                    Logger.Log(ex);
-                }
+            var icon = GetType().TryGetAttribute<IconAttribute>()?.Icon ?? Defaults.Icon;
+
+            try {
+                ic.ConvertIcon(new MacroFeatureIcon(icon, MacroFeatureIconInfo.RegularName), folder);
+                ic.ConvertIcon(new MacroFeatureIcon(icon, MacroFeatureIconInfo.HighlightedName), folder);
+                ic.ConvertIcon(new MacroFeatureSuppressedIcon(icon, MacroFeatureIconInfo.SuppressedName), folder);
+                ic.ConvertIcon(new MacroFeatureHighResIcon(icon, MacroFeatureIconInfo.RegularName), folder);
+                ic.ConvertIcon(new MacroFeatureHighResIcon(icon, MacroFeatureIconInfo.HighlightedName), folder);
+                ic.ConvertIcon(new MacroFeatureSuppressedHighResIcon(icon, MacroFeatureIconInfo.SuppressedName), folder);
+            } catch(Exception ex) {
+                Logger.Log(ex);
             }
         }
 
@@ -312,7 +320,7 @@ namespace XCad.Sw.Features.CustomFeature {
 
             } catch(Exception ex) {
                 m_Logger.Log(ex);
-                return ex is IUserException ? ex.Message : "Unknown regeneration error";
+                return ex is IUserException ? ex.Message : $"Regeneration error: {ex.GetType().Name}";
             }
 
             int OnIdleNotify() {
