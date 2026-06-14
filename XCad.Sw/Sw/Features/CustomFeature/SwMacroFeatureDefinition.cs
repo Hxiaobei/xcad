@@ -1,4 +1,4 @@
-
+﻿
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -316,51 +316,56 @@ namespace XCad.Sw.Features.CustomFeature {
                     }
                 }
 
-                return ParseMacroFeatureResult(res, macroFeatInst.FeatureData);
+                return ParseMacroFeatureResult(res, macroFeatInst.FeatureData, swApp, swDoc);
 
             } catch(Exception ex) {
                 m_Logger.Log(ex);
                 return ex is IUserException ? ex.Message : $"Regeneration error: {ex.GetType().Name}";
             }
+        }
 
-            int OnIdleNotify() {
-                m_IsSubscribedToIdle = false;
-                ((SldWorks)App.Sw).OnIdleNotify -= OnIdleNotify;
-                try {
-                    m_RebuildFeaturesQueue.ForEach(DispatchPostBuildData);
-                } finally {
-                    m_RebuildFeaturesQueue.Clear();
-                }
-                return HResult.S_OK;
+        private int OnIdleNotify() {
+            m_IsSubscribedToIdle = false;
+            ((SldWorks)App.Sw).OnIdleNotify -= OnIdleNotify;
+            try {
+                m_RebuildFeaturesQueue.ForEach(DispatchPostBuildData);
+            } finally {
+                m_RebuildFeaturesQueue.Clear();
+            }
+            return HResult.S_OK;
+        }
+
+        private object ParseMacroFeatureResult(RebuildResult res, IMacroFeatureData featData, ISldWorks swApp, IModelDoc2 swDoc) {
+            if(res == null) return null;
+
+            if(!(res is BodyRebuildResult bodyRes))
+                return res.Result ? (object)true : res.ErrorMessage;
+
+            var bodies = (bodyRes.Bodies?
+                .Select(body => (body ?? throw new InvalidCastException($"Only bodies of type '{nameof(ISwBody)}' are supported")).Body)
+                ?? Enumerable.Empty<IBody2>()).ToArray();
+
+            if(bodies.Length == 0) return true;
+
+            if(featData == null) throw new ArgumentNullException(nameof(featData));
+
+            if(CompatibilityUtils.IsVersionNewerOrEqual(swApp, SwVersion_e.Sw2013, 5))
+                featData.EnableMultiBodyConsume = true;
+
+            int faceIdOffset = 0;
+            int edgeIdOffset = 0;
+            foreach(var body in bodies) {
+                featData.GetEntitiesNeedUserId(body, out var facesObj, out var edgesObj);
+                var faces = facesObj.ToSwArray<Face2>();
+                var edges = edgesObj.ToSwArray<Edge>();
+                AssignFaceIds(swApp, swDoc, faces, featData, faceIdOffset);
+                AssignEdgeIds(swApp, swDoc, edges, featData, edgeIdOffset);
+                faceIdOffset += faces.Length;
+                edgeIdOffset += edges.Length;
             }
 
-            object ParseMacroFeatureResult(RebuildResult res, IMacroFeatureData featData) {
-                if(res == null) return null;
-
-                if(!(res is BodyRebuildResult bodyRes))
-                    return res.Result ? (object)true : res.ErrorMessage;
-
-                // 优化7: 提前物化避免延迟枚举中的异常被吞没
-                var bodies = (bodyRes.Bodies?
-                    .Select(body => (body ?? throw new InvalidCastException($"Only bodies of type '{nameof(ISwBody)}' are supported")).Body)
-                    ?? Enumerable.Empty<IBody2>()).ToArray();
-
-                if(bodies.Length == 0) return true;
-
-                if(featData == null) throw new ArgumentNullException(nameof(featData));
-
-                if(CompatibilityUtils.IsVersionNewerOrEqual(swApp, SwVersion_e.Sw2013, 5))
-                    featData.EnableMultiBodyConsume = true;
-
-                foreach(var body in bodies) {
-                    featData.GetEntitiesNeedUserId(body, out var facesObj, out var edgesObj);
-                    AssignFaceIds(swApp, swDoc, facesObj.ToSwArray<Face2>(), featData);
-                    AssignEdgeIds(swApp, swDoc, edgesObj.ToSwArray<Edge>(), featData);
-                }
-
-                var result = bodies.ToArray();
-                return result.Length == 1 ? (object)result[0] : result;
-            }
+            var result = bodies.ToArray();
+            return result.Length == 1 ? (object)result[0] : result;
         }
 
         [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
@@ -408,15 +413,15 @@ namespace XCad.Sw.Features.CustomFeature {
 
         protected bool m_HandlePostRebuild;
 
-        protected virtual void AssignFaceIds(ISldWorks app, IModelDoc2 model, Face2[] faces, IMacroFeatureData featData) {
+        protected virtual void AssignFaceIds(ISldWorks app, IModelDoc2 model, Face2[] faces, IMacroFeatureData featData, int startId = 0) {
             for(int i = 0; i < faces.Length; i++) {
-                featData.SetFaceUserId(faces[i], i, 0);
+                featData.SetFaceUserId(faces[i], startId + i, 0);
             }
         }
 
-        protected virtual void AssignEdgeIds(ISldWorks app, IModelDoc2 model, Edge[] edges, IMacroFeatureData featData) {
+        protected virtual void AssignEdgeIds(ISldWorks app, IModelDoc2 model, Edge[] edges, IMacroFeatureData featData, int startId = 0) {
             for(int i = 0; i < edges.Length; i++) {
-                featData.SetEdgeUserId(edges[i], i, 0);
+                featData.SetEdgeUserId(edges[i], startId + i, 0);
             }
         }
 
@@ -462,7 +467,7 @@ namespace XCad.Sw.Features.CustomFeature {
         public SwMacroFeatureDefinition() : base(CreateMacroFeatureInstance) { }
 
         public void AlignDimension(ISwDimension dim, Vec3d[] pts, Vec3d dir, Vec3d extDir) {
-            if(pts != null && pts.Length == 2) {
+            if(pts != null && pts.Length == 2 && dim?.Dimension != null) {
 
                 if(!dir.IsNaN())
                     dim.Dimension.DimensionLineDirection = dir.ToSwVec();
@@ -600,7 +605,7 @@ namespace XCad.Sw.Features.CustomFeature {
 
         /// <inheritdoc/>
         public virtual TParams ConvertPageToParams(ISwApplication app, ISwDocument doc, TPage page, TParams curParams) {
-            if(typeof(TParams).IsAssignableFrom(typeof(TPage))) {
+            if(typeof(TParams) == typeof(TPage)) {
                 return (TParams)(object)page;
             } else {
                 throw new Exception($"Override {nameof(ConvertPageToParams)} to provide the converter from TPage to TParams");
@@ -609,7 +614,7 @@ namespace XCad.Sw.Features.CustomFeature {
 
         /// <inheritdoc/>
         public virtual TPage ConvertParamsToPage(ISwApplication app, ISwDocument doc, TParams par) {
-            if(typeof(TPage).IsAssignableFrom(typeof(TParams))) {
+            if(typeof(TParams) == typeof(TPage)) {
                 return (TPage)(object)par;
             } else {
                 throw new Exception($"Override {nameof(ConvertParamsToPage)} to provide the converter from TParams to TPage");
@@ -617,7 +622,7 @@ namespace XCad.Sw.Features.CustomFeature {
         }
 
         /// <inheritdoc/>
-        public virtual ISwBody[] CreateGeometry(ISwApplication app, ISwDocument doc, ISwMacroFeature<TParams> feat) => new ISwBody[0];
+        public virtual ISwBody[] CreateGeometry(ISwApplication app, ISwDocument doc, ISwMacroFeature<TParams> feat) => [];
 
         /// <inheritdoc/>
         public virtual ISwBody[] CreatePreviewGeometry(ISwApplication app, ISwDocument doc, ISwMacroFeature<TParams> feat, TPage page)
@@ -709,16 +714,11 @@ namespace XCad.Sw.Features.CustomFeature {
         /// <param name="doc">Current document</param>
         /// <returns>Either <see cref="IXPart"/> or <see cref="ISwComponent"/></returns>
         protected virtual ISwObject ProvidePreviewContext(ISwDocument doc) {
-            switch(doc) {
-                case ISwPart part:
-                    return part;
-
-                case ISwAssembly assm:
-                    return assm.EditingComponent;
-
-                default:
-                    throw new NotSupportedException("Not supported preview context");
-            }
+            return doc switch {
+                ISwPart part => part,
+                ISwAssembly assm => assm.EditingComponent,
+                _ => throw new NotSupportedException("Not supported preview context"),
+            };
         }
     }
 
