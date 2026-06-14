@@ -1,4 +1,4 @@
-﻿
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -544,14 +544,13 @@ namespace XCad.Sw.Features.CustomFeature {
     public abstract class SwMacroFeatureDefinition<TParams, TPage> : SwMacroFeatureDefinition<TParams>, ISwMacroFeatureDefinition<TParams, TPage>
         where TParams : class
         where TPage : class {
-        ISwBody[] ISwMacroFeatureDefinition<TParams, TPage>.CreateGeometry(
-            ISwApplication app, ISwDocument doc, ISwMacroFeature<TParams> feat)
+        ISwBody[] ISwMacroFeatureDefinition<TParams, TPage>.CreateGeometry(ISwApplication app, ISwDocument doc, ISwMacroFeature<TParams> feat)
             => CreateGeometry(app, doc, feat).ToSwArray<SwBody>();
 
         private readonly Lazy<SwMacroFeatureEditor<TParams, TPage>> m_Editor;
 
         /// <summary>
-        /// Default constructor
+        /// 默认构造函数，初始化属性管理器页面以及宏特征编辑器
         /// </summary>
         public SwMacroFeatureDefinition() {
             m_Editor = new Lazy<SwMacroFeatureEditor<TParams, TPage>>(() => {
@@ -574,32 +573,32 @@ namespace XCad.Sw.Features.CustomFeature {
         }
 
         /// <summary>
-        /// Behavior of macro feature editor
+        /// 宏特征编辑器的行为模式配置（例如控制是否自动生成预览等）
         /// </summary>
         protected virtual CustomFeatureEditorBehavior_e EditorBehavior => CustomFeatureEditorBehavior_e.Default;
 
         /// <summary>
-        /// Override this method to handle the exception reading the macro feature parameters on editing of the macro feature
+        /// 重写此方法以处理在编辑宏特征并读取特征参数时可能发生的异常
         /// </summary>
-        /// <param name="feat">Feature being edited</param>
-        /// <param name="ex">Exception</param>
-        /// <returns>Parameters to use for feature editing</returns>
+        /// <param name="feat">正在被编辑的特征对象</param>
+        /// <param name="ex">发生的异常信息</param>
+        /// <returns>回退时用于特征编辑的参数</returns>
         protected virtual TParams HandleEditingException(ISwMacroFeature<TParams> feat, Exception ex) => throw ex;
 
         /// <summary>
-        /// Checks if the preview should be updated
+        /// 检查并控制在参数变化时是否应该更新预览几何体
         /// </summary>
-        /// <param name="oldData">Old parameters</param>
-        /// <param name="newData">New parameters</param>
-        /// <param name="page">Current page data</param>
-        /// <param name="dataChanged">Indicates if the parameters of the data have changed</param>
-        /// <remarks>This method is called everytime property manager page data is changed, however this is not always require preview update</remarks>
+        /// <param name="oldData">旧的参数数据</param>
+        /// <param name="newData">新的参数数据</param>
+        /// <param name="page">当前的页面数据对象</param>
+        /// <param name="dataChanged">指示数据参数是否发生了实际变化</param>
+        /// <remarks>每次属性管理器页面中的数据发生改变时都会调用此方法，但并非所有界面上的改变都需要重新计算和更新预览模型。通过重写此方法过滤不必要的更新，可以显著提升交互性能。</remarks>
         public virtual bool ShouldUpdatePreview(TParams oldData, TParams newData, TPage page, bool dataChanged) => true;
 
         /// <summary>
-        /// Create custom page handler
+        /// 创建自定义的属性管理器页面处理器
         /// </summary>
-        /// <returns>Page handler</returns>
+        /// <returns>页面处理器的实例</returns>
         public virtual SwPropertyManagerPageHandler CreatePageHandler()
             => m_SvcProvider.GetService<IPropertyPageHandlerProvider>().CreateHandler(App, typeof(TPage));
 
@@ -651,57 +650,57 @@ namespace XCad.Sw.Features.CustomFeature {
             => new BodyRebuildResult() { Bodies = CreateGeometry(app, doc, feature) };
 
         /// <summary>
-        /// Called when macro feature is about to be edited before Property Manager Page is opened
+        /// 在即将开始编辑宏特征时（属性管理器页面打开之前）调用
         /// </summary>
-        /// <param name="app">Application</param>
-        /// <param name="doc">Document</param>
-        /// <param name="feat">Feature being edited (null if feature is being inserted)</param>
-        /// <param name="page">Page data</param>
+        /// <param name="app">SOLIDWORKS 应用程序实例</param>
+        /// <param name="doc">当前活动的文档对象</param>
+        /// <param name="feat">正在被编辑的特征实例（如果当前是新建/插入特征的操作，则此值为 null）</param>
+        /// <param name="page">当前页面绑定的数据对象</param>
         public virtual void OnEditingStarted(ISwApplication app, ISwDocument doc, ISwMacroFeature<TParams> feat, TPage page) {
         }
 
         /// <summary>
-        /// Called when macro feature is finishing editing and Property Manager Page is about to be closed
+        /// 在宏特征即将完成编辑时（属性管理器页面即将关闭，但尚未完全销毁）调用
         /// </summary>
-        /// <param name="app">Application</param>
-        /// <param name="doc">Document</param>
-        /// <param name="feat">Feature being edited</param>
-        /// <param name="page">Page data</param>
-        /// <param name="reason">Closing reason</param>
+        /// <param name="app">SOLIDWORKS 应用程序实例</param>
+        /// <param name="doc">当前活动的文档对象</param>
+        /// <param name="feat">正在被编辑的特征实例</param>
+        /// <param name="page">当前页面绑定的数据对象</param>
+        /// <param name="reason">导致页面关闭的原因（例如用户点击了打勾确认、取消或按了 Esc 键）</param>
         public virtual void OnEditingCompleting(ISwApplication app, ISwDocument doc, ISwMacroFeature<TParams> feat, TPage page, PageCloseReasons_e reason) {
         }
 
         /// <summary>
-        /// Called when macro feature is finished editing and Property Manager Page is closed
+        /// 在宏特征已经完成编辑并且属性管理器页面已完全关闭后调用
         /// </summary>
-        /// <param name="app">Application</param>
-        /// <param name="doc">Document</param>
-        /// <param name="feat">Feature being edited</param>
-        /// <param name="page">Page data</param>
-        /// <param name="reason">Closing reason</param>
+        /// <param name="app">SOLIDWORKS 应用程序实例</param>
+        /// <param name="doc">当前活动的文档对象</param>
+        /// <param name="feat">正在被编辑的特征实例</param>
+        /// <param name="page">页面绑定的最终数据对象</param>
+        /// <param name="reason">页面关闭的原因</param>
         public virtual void OnEditingCompleted(ISwApplication app, ISwDocument doc, ISwMacroFeature<TParams> feat, TPage page, PageCloseReasons_e reason) {
         }
 
         /// <summary>
-        /// Called when macro feature is being created
+        /// 当新的宏特征正在被创建（即插入特征过程）时调用
         /// </summary>
-        /// <param name="app">Application</param>
-        /// <param name="doc">Document</param>
-        /// <param name="feat">Feature which is being created (this feature is in not-committed state)</param>
-        /// <param name="page">Page data</param>
-        /// <remarks>Call <see cref="IXTransaction.Commit(System.Threading.CancellationToken)"/> on the feature to insert it into the tree</remarks>
+        /// <param name="app">SOLIDWORKS 应用程序实例</param>
+        /// <param name="doc">当前活动的文档对象</param>
+        /// <param name="feat">即将要被创建的特征实例（此时该特征处于未提交状态，还未进入特征树）</param>
+        /// <param name="page">页面上用户填写的最新数据对象</param>
+        /// <remarks>若重写此方法，必须在逻辑的最后手动调用特征对象的 <see cref="IXTransaction.Commit(System.Threading.CancellationToken)"/> 方法将其真正插入到特征树中</remarks>
         public virtual void OnFeatureInserting(ISwApplication app, ISwDocument doc, ISwMacroFeature<TParams> feat, TPage page)
            => feat.Commit();
 
 
         /// <summary>
-        /// Called when the preview of the macro feature updated
+        /// 当宏特征的预览几何体渲染被触发或更新完成后调用
         /// </summary>
-        /// <param name="app">Application</param>
-        /// <param name="doc">Document</param>
-        /// <param name="feat">Feature being edited</param>
-        /// <param name="page">Current page data</param>
-        /// <remarks>Use <see cref="ShouldUpdatePreview(TParams, TParams, TPage, bool)"/> to control if preview needs to be updated</remarks>
+        /// <param name="app">SOLIDWORKS 应用程序实例</param>
+        /// <param name="doc">当前活动的文档对象</param>
+        /// <param name="feat">正在被编辑或预览的特征实例</param>
+        /// <param name="page">当前的页面数据对象</param>
+        /// <remarks>请利用 <see cref="ShouldUpdatePreview(TParams, TParams, TPage, bool)"/> 方法来优化控制预览是否需要被刷新，而不是在这里阻止刷新。</remarks>
         public virtual void OnPreviewUpdated(ISwApplication app, ISwDocument doc, ISwMacroFeature<TParams> feat, TPage page) {
         }
 
@@ -709,10 +708,10 @@ namespace XCad.Sw.Features.CustomFeature {
         public virtual IControlDescriptor[] CreateDynamicControls(object tag) => null;
 
         /// <summary>
-        /// Context for the preview of this document
+        /// 提供当前宏特征预览渲染所挂载的目标上下文环境
         /// </summary>
-        /// <param name="doc">Current document</param>
-        /// <returns>Either <see cref="IXPart"/> or <see cref="ISwComponent"/></returns>
+        /// <param name="doc">当前文档</param>
+        /// <returns>返回 <see cref="ISwPart"/>（零件环境） 或 <see cref="ISwComponent"/>（装配体中正在编辑的组件上下文）</returns>
         protected virtual ISwObject ProvidePreviewContext(ISwDocument doc) {
             return doc switch {
                 ISwPart part => part,

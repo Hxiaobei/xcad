@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -245,8 +245,6 @@ namespace XCad.kit.CustomFeature {
             return true;
         }
 
-        // 修正：Parse 方法只有 5 个 out 参数，因此返回 5 元组
-
         private void OnPageClosed(PageCloseReasons_e reason) {
             m_Logger.Log($"OnPageClosed: reason={reason}", LoggerMessageSeverity_e.Debug);
             if(m_IsApplying) reason = PageCloseReasons_e.Apply;
@@ -329,8 +327,7 @@ namespace XCad.kit.CustomFeature {
                     HidePreviewBodies();
                     m_PreviewBodies = Definition.CreatePreviewGeometry(m_App, CurrentDocument, m_CurrentFeature, m_CurPageData);
                     HideEditBodies();
-                    if(m_PreviewBodies?.Any() == true)
-                        DisplayPreview(m_PreviewBodies);
+                    if(m_PreviewBodies?.Any() == true) DisplayPreview(m_PreviewBodies);
                 } catch(Exception ex) {
                     HidePreviewBodies();
                     ShowEditBodies();

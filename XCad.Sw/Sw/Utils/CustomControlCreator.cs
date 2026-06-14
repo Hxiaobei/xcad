@@ -30,9 +30,7 @@ namespace XCad.Sw.Utils {
                 icon = iconAtt.Icon;
             }
 
-            if(icon == null) {
-                icon = Defaults.Icon;
-            }
+            icon ??= Defaults.Icon;
         }
 
         protected abstract TSpecificHost HostComControl(string progId, string title,
@@ -45,10 +43,8 @@ namespace XCad.Sw.Utils {
             => CreateControl(ctrlType, out specCtrl, out _);
 
         public TSpecificHost CreateControl(Type ctrlType, out TControl specCtrl, out System.Windows.Forms.Control winCtrl) {
-            string title;
-            IXImage icon;
 
-            GetControlAttribution(ctrlType, out title, out icon);
+            GetControlAttribution(ctrlType, out string title, out IXImage icon);
 
             if(typeof(System.Windows.Forms.Control).IsAssignableFrom(ctrlType)) {
                 if(typeof(System.Windows.Forms.UserControl).IsAssignableFrom(ctrlType) && ctrlType.IsComVisible()) {
@@ -61,8 +57,9 @@ namespace XCad.Sw.Utils {
                 }
             } else if(typeof(System.Windows.UIElement).IsAssignableFrom(ctrlType)) {
                 var wpfCtrl = (System.Windows.UIElement)Activator.CreateInstance(ctrlType);
-                var host = new System.Windows.Forms.Integration.ElementHost();
-                host.Child = wpfCtrl;
+                var host = new System.Windows.Forms.Integration.ElementHost {
+                    Child = wpfCtrl
+                };
                 specCtrl = (TControl)(object)wpfCtrl;
                 winCtrl = host;
                 return HostNetControl(host, specCtrl, title, icon);
