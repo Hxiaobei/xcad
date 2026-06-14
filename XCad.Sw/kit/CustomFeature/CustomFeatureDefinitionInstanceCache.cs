@@ -7,8 +7,8 @@ namespace XCad.kit.CustomFeature {
     /// Manages the cache of custom feature servers
     /// </summary>
     public static class CustomFeatureDefinitionInstanceCache {
-        private static Dictionary<Type, ISwMacroFeatureDefinition> m_Instances
-            = new Dictionary<Type, ISwMacroFeatureDefinition>();
+        private static readonly Dictionary<Type, ISwMacroFeatureDefinition> m_Instances
+            = [];
 
         /// <summary>
         /// Registers instance of the custom feature server
@@ -17,9 +17,9 @@ namespace XCad.kit.CustomFeature {
         public static void RegisterInstance(ISwMacroFeatureDefinition inst) {
             var type = inst.GetType();
 
-            if(!m_Instances.ContainsKey(type)) {
-                m_Instances.Add(type, inst);
-            }
+            if(m_Instances.ContainsKey(type)) return;
+
+            m_Instances.Add(type, inst);
         }
 
         /// <summary>
@@ -32,9 +32,12 @@ namespace XCad.kit.CustomFeature {
                 throw new InvalidCastException($"{defType.FullName} must implement {typeof(ISwMacroFeatureDefinition).FullName}");
             }
 
-
             if(!m_Instances.TryGetValue(defType, out ISwMacroFeatureDefinition inst)) {
-                //TODO: validate that default constructor is available
+                var ctor = defType.GetConstructor(Type.EmptyTypes);
+                if(ctor == null) {
+                    throw new InvalidOperationException(
+                        $"Type '{defType.FullName}' must have a public parameterless constructor to be used as a macro feature definition.");
+                }
 
                 inst = (ISwMacroFeatureDefinition)Activator.CreateInstance(defType);
                 RegisterInstance(inst);

@@ -429,6 +429,17 @@ namespace XCad.Sw.Features.CustomFeature {
             return dimsVersion;
         }
 
+        /// <summary>
+        /// Converts a .NET type to the corresponding SOLIDWORKS macro feature parameter type enum
+        /// </summary>
+        private static swMacroFeatureParamType_e GetSwParamType(Type paramType) {
+            if(paramType == typeof(int))
+                return swMacroFeatureParamType_e.swMacroFeatureParamTypeInteger;
+            if(paramType == typeof(double))
+                return swMacroFeatureParamType_e.swMacroFeatureParamTypeDouble;
+            return swMacroFeatureParamType_e.swMacroFeatureParamTypeString;
+        }
+
         private void SeparateParameters(CustomFeatureAttribute[] param, out string[] paramNames, out int[] paramTypes, out string[] paramValues) {
             if(param != null) {
                 paramNames = new string[param.Length];
@@ -437,17 +448,11 @@ namespace XCad.Sw.Features.CustomFeature {
 
                 for(int i = 0; i < param.Length; i++) {
                     paramNames[i] = param[i].Name;
+                    paramTypes[i] = (int)GetSwParamType(param[i].Type);
 
-                    var paramType = param[i].Type;
-
-                    if(paramType == typeof(int)) {
-                        paramTypes[i] = (int)swMacroFeatureParamType_e.swMacroFeatureParamTypeInteger;
-                        paramValues[i] = Convert.ToString(param[i].Value);
-                    } else if(paramType == typeof(double)) {
-                        paramTypes[i] = (int)swMacroFeatureParamType_e.swMacroFeatureParamTypeDouble;
+                    if(param[i].Type == typeof(double)) {
                         paramValues[i] = Convert.ToString(param[i].Value, CultureInfo.InvariantCulture);
                     } else {
-                        paramTypes[i] = (int)swMacroFeatureParamType_e.swMacroFeatureParamTypeString;
                         paramValues[i] = Convert.ToString(param[i].Value);
                     }
                 }
@@ -491,11 +496,12 @@ namespace XCad.Sw.Features.CustomFeature {
                     //macro feature dimensions cannot be changed in the existing feature
                     //reverting the dimensions version
                     if(state.HasFlag(CustomFeatureOutdateState_e.Dimensions)) {
-                        var vers = GetVersion(CustomFeatureParametersParser.VERSION_DIMENSIONS_NAME);
-
                         var paramIndex = Array.FindIndex(param, p => p.Name == CustomFeatureParametersParser.VERSION_DIMENSIONS_NAME);
 
-                        param[paramIndex] = new CustomFeatureAttribute(param[paramIndex].Name, param[paramIndex].Type, vers.ToString());
+                        if(paramIndex >= 0) {
+                            var vers = GetVersion(CustomFeatureParametersParser.VERSION_DIMENSIONS_NAME);
+                            param[paramIndex] = new CustomFeatureAttribute(param[paramIndex].Name, param[paramIndex].Type, vers.ToString());
+                        }
                     }
 
                     string[] paramNames;

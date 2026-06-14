@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -78,7 +78,7 @@ namespace XCad.kit.CustomFeature {
         }
 
         private static readonly ConcurrentDictionary<Type, PropertyMetadata[]> s_MetadataCache
-            = new ConcurrentDictionary<Type, PropertyMetadata[]>();
+            = new();
 
         private static PropertyMetadata[] GetOrBuildMetadata(Type paramsType) {
             return s_MetadataCache.GetOrAdd(paramsType, type => {
@@ -156,26 +156,18 @@ namespace XCad.kit.CustomFeature {
             ref Dictionary<string, object> featPrps,
             ref ISwDimension[] featDims, ref ISwBody[] featEditBodies,
             ref SelectionInfo[] featSels, out string[] dispDimParams) {
-            var parameters = new Dictionary<string, object>();
-
-            if(featPrps?.Any() == true) {
-                foreach(var featRawParam in featPrps) {
-                    var paramName = featRawParam.Key;
-
-                    if(paramName != VERSION_PARAMETERS_NAME && paramName != VERSION_DIMENSIONS_NAME) {
-                        var paramVal = featRawParam.Value;
-                        parameters.Add(paramName, paramVal);
-                    }
-                }
-            }
+            var parameters = featPrps != null
+                ? featPrps.Where(kvp => kvp.Key != VERSION_PARAMETERS_NAME && kvp.Key != VERSION_DIMENSIONS_NAME)
+                          .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                : new Dictionary<string, object>();
 
             var resParams = Activator.CreateInstance(paramsType);
 
             var dispDimParamsMap = new SortedDictionary<int, string>();
 
-            var featDimsLocal = featDims ?? new ISwDimension[0];
-            var featEditBodiesLocal = featEditBodies ?? new ISwBody[0];
-            var featSelsLocal = featSels ?? new SelectionInfo[0];
+            var featDimsLocal = featDims ?? [];
+            var featEditBodiesLocal = featEditBodies ?? [];
+            var featSelsLocal = featSels ?? [];
 
             TraverseParametersDefinition(resParams,
                 (obj, prp) => {
@@ -404,10 +396,7 @@ namespace XCad.kit.CustomFeature {
             var indices = GetObjectIndices(prp, parameters);
 
             if(indices != null && indices.Any()) {
-                if(availableObjects == null) {
-                    availableObjects = new object[0];
-                }
-
+                availableObjects ??= new object[0];
                 object val = null;
 
                 // 优化3: 改进索引越界处理，使用 FaultObject 替代硬抛异常
@@ -476,7 +465,7 @@ namespace XCad.kit.CustomFeature {
         /// </summary>
         private int[] GetObjectIndices(PropertyInfo prp, Dictionary<string, object> parameters) {
             if(!parameters.TryGetValue(prp.Name, out object indValues))
-                return Array.Empty<int>();
+                return [];
 
             var parts = indValues.ToString().Split(',');
             var result = new List<int>(parts.Length);
